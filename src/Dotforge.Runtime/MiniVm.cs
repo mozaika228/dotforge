@@ -42,7 +42,8 @@ public sealed class MiniVm
 
         var methodBody = assembly.GetMethodBody(methodHandle);
         var decoded = IlDecoder.Decode(methodBody);
-        var frame = new ExecutionFrame(instructions: decoded.Instructions, methodBody: methodBody, args: args)
+        var localCount = ReadLocalCount(metadata, methodBody.LocalSignature);
+        var frame = new ExecutionFrame(instructions: decoded.Instructions, methodBody: methodBody, args: args, localCount: localCount)
         {
             Assembly = assembly,
             Caches = caches
@@ -496,8 +497,12 @@ public sealed class MiniVm
             throw new InvalidOperationException($"Could not resolve type name for token 0x{typeToken:X8}.");
         }
 
-        caches.TypeFieldKeysByToken.TryGetValue(typeToken, out var fields);
-        var instance = _heap.AllocateObject(typeHandle, typeName, fields ?? Array.Empty<string>());
+        if (!caches.TypeFieldKeysByToken.TryGetValue(typeToken, out var fields))
+        {
+            fields = [];
+        }
+
+        var instance = _heap.AllocateObject(typeHandle, typeName, fields);
         var ctorArgs = PopArguments(stack, ctorSig.ParameterCount);
         var allArgs = new object?[ctorArgs.Length + 1];
         allArgs[0] = instance;
@@ -759,6 +764,23 @@ public sealed class MiniVm
         return new MethodSignatureInfo(parameterCount, header.IsInstance, returnType == SignatureTypeCode.Void);
     }
 
+    private static int ReadLocalCount(MetadataReader metadata, BlobHandle localSignature)
+    {
+        if (localSignature.IsNil)
+        {
+            return 0;
+        }
+
+        var reader = metadata.GetBlobReader(localSignature);
+        var header = reader.ReadSignatureHeader();
+        if (header.Kind != SignatureKind.LocalVariables)
+        {
+            throw new NotSupportedException($"Unsupported local signature kind: {header.Kind}.");
+        }
+
+        return reader.ReadCompressedInteger();
+    }
+
     private static object?[] PopArguments(Stack<object?> stack, int count)
     {
         var args = new object?[count];
@@ -929,12 +951,12 @@ public sealed class MiniVm
 
     private sealed class ExecutionFrame
     {
-        public ExecutionFrame(IReadOnlyList<IlInstruction> instructions, MethodBodyBlock methodBody, object?[] args)
+        public ExecutionFrame(IReadOnlyList<IlInstruction> instructions, MethodBodyBlock methodBody, object?[] args, int localCount)
         {
             Instructions = instructions;
             MethodBody = methodBody;
             Args = args;
-            Locals = new object?[methodBody.LocalVariables.Count];
+            Locals = new object?[localCount];
             Stack = new Stack<object?>();
             OffsetToIndex = BuildOffsetMap(instructions);
             Assembly = null!;
