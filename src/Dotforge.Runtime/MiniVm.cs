@@ -764,14 +764,15 @@ public sealed class MiniVm
         return new MethodSignatureInfo(parameterCount, header.IsInstance, returnType == SignatureTypeCode.Void);
     }
 
-    private static int ReadLocalCount(MetadataReader metadata, BlobHandle localSignature)
+    private static int ReadLocalCount(MetadataReader metadata, StandaloneSignatureHandle localSignatureHandle)
     {
-        if (localSignature.IsNil)
+        if (localSignatureHandle.IsNil)
         {
             return 0;
         }
 
-        var reader = metadata.GetBlobReader(localSignature);
+        var localSig = metadata.GetStandaloneSignature(localSignatureHandle);
+        var reader = metadata.GetBlobReader(localSig.Signature);
         var header = reader.ReadSignatureHeader();
         if (header.Kind != SignatureKind.LocalVariables)
         {
