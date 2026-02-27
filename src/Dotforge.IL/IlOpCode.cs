@@ -1,0 +1,38 @@
+namespace Dotforge.IL;
+
+public enum IlOpCode
+{
+    Nop,
+    Ldarg0,
+    Ldarg1,
+    Ldarg2,
+    Ldarg3,
+    LdargS,
+    Ldarg,
+    LdcI4M1,
+    LdcI4_0,
+    LdcI4_1,
+    LdcI4_2,
+    LdcI4_3,
+    LdcI4_4,
+    LdcI4_5,
+    LdcI4_6,
+    LdcI4_7,
+    LdcI4_8,
+    LdcI4S,
+    LdcI4,
+    Ldstr,
+    Pop,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Call,
+    BrS,
+    BrfalseS,
+    BrtrueS,
+    Br,
+    Brfalse,
+    Brtrue,
+    Ret
+}
