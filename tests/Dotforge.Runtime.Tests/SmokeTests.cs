@@ -1,9 +1,11 @@
 namespace Dotforge.Runtime.Tests;
 
-public static class SmokeTests
+public sealed class SmokeTests
 {
-    // Placeholder for future test runner integration (xUnit/NUnit).
-    public static void Placeholder()
+    [Xunit.Fact]
+    public void RuntimeAssemblyLoads()
     {
+        var vmType = typeof(MiniVm);
+        Xunit.Assert.NotNull(vmType);
     }
 }
