@@ -1,3 +1,5 @@
+using System.Reflection.Metadata;
+
 namespace Dotforge.Runtime.Gc;
 
 internal sealed class GenerationalHeap
@@ -6,7 +8,7 @@ internal sealed class GenerationalHeap
     private readonly HashSet<DotObject> _old = [];
     private readonly HashSet<DotObject> _rememberedOld = [];
 
-    public DotObject AllocateObject(System.Reflection.Metadata.Ecma335.TypeDefinitionHandle typeHandle, string typeName, IEnumerable<string> fields)
+    public DotObject AllocateObject(TypeDefinitionHandle typeHandle, string typeName, IEnumerable<string> fields)
     {
         var obj = new DotObject(typeHandle, typeName, fields, this);
         _young.Add(obj);
