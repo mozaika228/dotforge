@@ -21,6 +21,7 @@ public enum IlOpCode
     LdcI4_8,
     LdcI4S,
     LdcI4,
+    Ldnull,
     Ldstr,
     Pop,
     Add,
@@ -34,5 +35,8 @@ public enum IlOpCode
     Br,
     Brfalse,
     Brtrue,
+    Ldfld,
+    Stfld,
+    Newobj,
     Ret
 }

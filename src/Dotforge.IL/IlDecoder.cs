@@ -46,6 +46,7 @@ public static class IlDecoder
                 0x1E => new IlInstruction(offset, IlOpCode.LdcI4_8),
                 0x1F => new IlInstruction(offset, IlOpCode.LdcI4S, (sbyte)il.ReadSByte()),
                 0x20 => new IlInstruction(offset, IlOpCode.LdcI4, il.ReadInt32()),
+                0x14 => new IlInstruction(offset, IlOpCode.Ldnull),
                 0x26 => new IlInstruction(offset, IlOpCode.Pop),
                 0x28 => new IlInstruction(offset, IlOpCode.Call, il.ReadInt32()),
                 0x2A => new IlInstruction(offset, IlOpCode.Ret),
@@ -59,7 +60,10 @@ public static class IlDecoder
                 0x59 => new IlInstruction(offset, IlOpCode.Sub),
                 0x5A => new IlInstruction(offset, IlOpCode.Mul),
                 0x5B => new IlInstruction(offset, IlOpCode.Div),
+                0x7B => new IlInstruction(offset, IlOpCode.Ldfld, il.ReadInt32()),
+                0x7D => new IlInstruction(offset, IlOpCode.Stfld, il.ReadInt32()),
                 0x72 => new IlInstruction(offset, IlOpCode.Ldstr, il.ReadInt32()),
+                0x73 => new IlInstruction(offset, IlOpCode.Newobj, il.ReadInt32()),
                 _ => throw new NotSupportedException($"Unsupported IL opcode: 0x{opByte:X2} at offset {offset}.")
             });
         }

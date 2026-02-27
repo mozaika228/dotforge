@@ -7,6 +7,7 @@ Current vertical slice:
 - Resolve entry point method (`Main` token from CLR header).
 - Decode a small IL opcode subset.
 - Interpret method body in a minimal stack VM.
+- Execute simple object flows: `newobj`, `.ctor`, `ldfld`, `stfld`.
 - Handle `System.Console.WriteLine` as an intrinsic call.
 
 ## Layout
