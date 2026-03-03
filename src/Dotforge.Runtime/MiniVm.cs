@@ -1,6 +1,7 @@
 using Dotforge.IL;
 using Dotforge.Metadata;
 using Dotforge.Runtime.Gc;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -490,16 +491,47 @@ public sealed class MiniVm
         var standaloneSig = metadata.GetStandaloneSignature((StandaloneSignatureHandle)sigHandle);
         var signature = ReadMethodSignature(metadata, standaloneSig.Signature);
         var totalArgs = signature.ParameterCount + (signature.IsInstance ? 1 : 0);
-        var args = PopArguments(stack, totalArgs);
-        var functionPointer = stack.Pop();
-        var targetToken = Convert.ToInt32(functionPointer);
-        var targetHandle = MetadataTokens.EntityHandle(targetToken);
-        if (targetHandle.Kind != HandleKind.MethodDefinition)
+
+        var raw = new object?[totalArgs + 1];
+        for (var i = 0; i < raw.Length; i++)
         {
-            throw new NotSupportedException($"calli target must be MethodDefinition token, got {targetHandle.Kind}.");
+            raw[i] = stack.Pop();
         }
 
-        var result = ExecuteMethod(assembly, caches, (MethodDefinitionHandle)targetHandle, args);
+        // Pattern A: ptr, argN ... arg1 (ptr on stack top)
+        var ptrA = raw[0];
+        var argsA = new object?[totalArgs];
+        for (var i = 0; i < totalArgs; i++)
+        {
+            argsA[i] = raw[totalArgs - i];
+        }
+
+        // Pattern B: argN ... arg1, ptr (ptr below args)
+        var ptrB = raw[totalArgs];
+        var argsB = new object?[totalArgs];
+        for (var i = 0; i < totalArgs; i++)
+        {
+            argsB[i] = raw[totalArgs - 1 - i];
+        }
+
+        MethodDefinitionHandle targetMethod;
+        object?[] callArgs;
+        if (TryResolveCalliTarget(ptrA, out targetMethod))
+        {
+            callArgs = argsA;
+        }
+        else if (TryResolveCalliTarget(ptrB, out targetMethod))
+        {
+            callArgs = argsB;
+        }
+        else
+        {
+            var kindA = DescribeHandleKind(ptrA);
+            var kindB = DescribeHandleKind(ptrB);
+            throw new NotSupportedException($"calli target must be MethodDefinition token (candidate kinds: {kindA}, {kindB}).");
+        }
+
+        var result = ExecuteMethod(assembly, caches, targetMethod, callArgs);
         if (!signature.ReturnsVoid)
         {
             stack.Push(result);
@@ -532,6 +564,16 @@ public sealed class MiniVm
             if (!signature.ReturnsVoid)
             {
                 stack.Push(intrinsicRet);
+            }
+
+            return;
+        }
+
+        if (TryInvokeHostCallVirt(args[0]!, name, args.Skip(1).ToArray(), out var hostRet))
+        {
+            if (!signature.ReturnsVoid)
+            {
+                stack.Push(hostRet);
             }
 
             return;
@@ -669,6 +711,99 @@ public sealed class MiniVm
                 returnValue = string.Concat(args.Select(x => x?.ToString() ?? string.Empty));
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    private static bool TryResolveCalliTarget(object? pointer, out MethodDefinitionHandle targetMethod)
+    {
+        targetMethod = default;
+        try
+        {
+            var token = Convert.ToInt32(pointer);
+            var entity = MetadataTokens.EntityHandle(token);
+            if (entity.Kind != HandleKind.MethodDefinition)
+            {
+                return false;
+            }
+
+            targetMethod = (MethodDefinitionHandle)entity;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string DescribeHandleKind(object? pointer)
+    {
+        try
+        {
+            var token = Convert.ToInt32(pointer);
+            var entity = MetadataTokens.EntityHandle(token);
+            return entity.Kind.ToString();
+        }
+        catch
+        {
+            return "InvalidToken";
+        }
+    }
+
+    private static bool TryInvokeHostCallVirt(object instance, string methodName, object?[] callArgs, out object? returnValue)
+    {
+        returnValue = null;
+        var type = instance.GetType();
+        var candidates = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(m => string.Equals(m.Name, methodName, StringComparison.Ordinal))
+            .Where(m => m.GetParameters().Length == callArgs.Length);
+
+        foreach (var candidate in candidates)
+        {
+            var parameters = candidate.GetParameters();
+            var converted = new object?[callArgs.Length];
+            var compatible = true;
+            for (var i = 0; i < callArgs.Length; i++)
+            {
+                var arg = callArgs[i];
+                var parameterType = parameters[i].ParameterType;
+                if (arg is null)
+                {
+                    if (parameterType.IsValueType && Nullable.GetUnderlyingType(parameterType) is null)
+                    {
+                        compatible = false;
+                        break;
+                    }
+
+                    converted[i] = null;
+                    continue;
+                }
+
+                if (parameterType.IsInstanceOfType(arg))
+                {
+                    converted[i] = arg;
+                    continue;
+                }
+
+                try
+                {
+                    converted[i] = Convert.ChangeType(arg, parameterType);
+                }
+                catch
+                {
+                    compatible = false;
+                    break;
+                }
+            }
+
+            if (!compatible)
+            {
+                continue;
+            }
+
+            returnValue = candidate.Invoke(instance, converted);
+            return true;
         }
 
         return false;

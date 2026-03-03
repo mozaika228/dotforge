@@ -10,13 +10,13 @@ DotForge is a CLR-style runtime project focused on executing managed IL with a p
 
 ```mermaid
 flowchart LR
-  A[Managed Assembly PE] --> B[Metadata Loader<br/>ECMA-335 tables]
-  B --> C[IL Decoder]
-  C --> D[Interpreter VM]
-  D --> E[Object/Array Model]
-  E --> F[Generational GC<br/>Gen0/Gen1 + write barrier]
-  B --> G[Reflection Catalog<br/>Type/Method/Field tables]
-  C --> H[JIT IR Plan (in progress)]
+  A["Managed Assembly PE"] --> B["Metadata Loader: ECMA-335 tables"]
+  B --> C["IL Decoder"]
+  C --> D["Interpreter VM"]
+  D --> E["Object and Array Model"]
+  E --> F["Generational GC: Gen0/Gen1 with write barrier"]
+  B --> G["Reflection Catalog: Type, Method, Field"]
+  C --> H["JIT IR Plan - In Progress"]
 ```
 
 ## Features
