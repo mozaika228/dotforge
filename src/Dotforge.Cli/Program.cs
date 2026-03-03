@@ -1,26 +1,52 @@
+using Dotforge.IL;
 using Dotforge.Metadata;
 using Dotforge.Metadata.Reflection;
 using Dotforge.Runtime;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 
-if (args.Length < 1)
+if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  dotforge <path-to-managed-assembly>");
-    Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
+    PrintUsage();
     return 1;
 }
 
-var inspectMode = string.Equals(args[0], "inspect", StringComparison.OrdinalIgnoreCase);
-if (inspectMode && args.Length < 2)
+var command = args[0].ToLowerInvariant();
+return command switch
 {
-    Console.Error.WriteLine("Usage: dotforge inspect <path-to-managed-assembly>");
-    return 1;
+    "run" => Run(args),
+    "inspect" => Inspect(args),
+    "disasm" => Disasm(args),
+    _ => UnknownCommand(command)
+};
+
+static int Run(string[] args)
+{
+    if (args.Length != 2)
+    {
+        Console.Error.WriteLine("Usage: dotforge run <path-to-managed-assembly>");
+        return 1;
+    }
+
+    using var assembly = ManagedAssembly.Load(args[1]);
+    var vm = new MiniVm();
+    if (string.Equals(Environment.GetEnvironmentVariable("DOTFORGE_GC_LOG"), "1", StringComparison.Ordinal))
+    {
+        vm.GcLogger = Console.Error.WriteLine;
+    }
+
+    return vm.ExecuteEntryPoint(assembly);
 }
 
-var assemblyPath = inspectMode ? args[1] : args[0];
-using var assembly = ManagedAssembly.Load(assemblyPath);
-if (inspectMode)
+static int Inspect(string[] args)
 {
+    if (args.Length != 2)
+    {
+        Console.Error.WriteLine("Usage: dotforge inspect <path-to-managed-assembly>");
+        return 1;
+    }
+
+    using var assembly = ManagedAssembly.Load(args[1]);
     var catalog = new MetadataCatalog(assembly);
     foreach (var type in catalog.GetTypes())
     {
@@ -39,8 +65,125 @@ if (inspectMode)
 
     return 0;
 }
-else
+
+static int Disasm(string[] args)
 {
-    var vm = new MiniVm();
-    return vm.ExecuteEntryPoint(assembly);
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("Usage: dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
+        return 1;
+    }
+
+    using var assembly = ManagedAssembly.Load(args[1]);
+    var metadata = assembly.Metadata;
+    var methodHandle = ResolveMethodHandle(metadata, args[2]);
+    var methodDef = metadata.GetMethodDefinition(methodHandle);
+    var declaringType = ResolveDeclaringType(metadata, methodHandle);
+    var methodName = metadata.GetString(methodDef.Name);
+    var typeName = ReadTypeName(metadata, declaringType);
+    var body = assembly.GetMethodBody(methodHandle);
+    var decoded = IlDecoder.Decode(body);
+
+    Console.WriteLine($".method {typeName}::{methodName} 0x{MetadataTokens.GetToken(methodHandle):X8}");
+    foreach (var instruction in decoded.Instructions)
+    {
+        var operand = instruction.Operand is null ? string.Empty : $" {instruction.Operand}";
+        Console.WriteLine($"  IL_{instruction.Offset:X4}: {instruction.OpCode}{operand}");
+    }
+
+    return 0;
+}
+
+static MethodDefinitionHandle ResolveMethodHandle(MetadataReader metadata, string methodArg)
+{
+    if (TryParseToken(methodArg, out var token))
+    {
+        var entity = MetadataTokens.EntityHandle(token);
+        if (entity.Kind != HandleKind.MethodDefinition)
+        {
+            throw new ArgumentException($"Token 0x{token:X8} is not a MethodDefinition.");
+        }
+
+        return (MethodDefinitionHandle)entity;
+    }
+
+    var parts = methodArg.Split("::", StringSplitOptions.None);
+    if (parts.Length != 2)
+    {
+        throw new ArgumentException("Method must be token (e.g. 0x06000001) or Type::Method.");
+    }
+
+    var typeName = parts[0];
+    var methodName = parts[1];
+
+    foreach (var typeHandle in metadata.TypeDefinitions)
+    {
+        if (!string.Equals(ReadTypeName(metadata, typeHandle), typeName, StringComparison.Ordinal))
+        {
+            continue;
+        }
+
+        var typeDef = metadata.GetTypeDefinition(typeHandle);
+        foreach (var candidate in typeDef.GetMethods())
+        {
+            var methodDef = metadata.GetMethodDefinition(candidate);
+            if (string.Equals(metadata.GetString(methodDef.Name), methodName, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    throw new MissingMethodException($"Method '{methodArg}' was not found.");
+}
+
+static bool TryParseToken(string value, out int token)
+{
+    token = 0;
+    if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+    {
+        return int.TryParse(value.AsSpan(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out token);
+    }
+
+    return int.TryParse(value, out token);
+}
+
+static TypeDefinitionHandle ResolveDeclaringType(MetadataReader metadata, MethodDefinitionHandle methodHandle)
+{
+    foreach (var typeHandle in metadata.TypeDefinitions)
+    {
+        var typeDef = metadata.GetTypeDefinition(typeHandle);
+        foreach (var candidate in typeDef.GetMethods())
+        {
+            if (candidate.Equals(methodHandle))
+            {
+                return typeHandle;
+            }
+        }
+    }
+
+    throw new InvalidOperationException("Declaring type not found.");
+}
+
+static string ReadTypeName(MetadataReader metadata, TypeDefinitionHandle typeHandle)
+{
+    var typeDef = metadata.GetTypeDefinition(typeHandle);
+    var ns = metadata.GetString(typeDef.Namespace);
+    var name = metadata.GetString(typeDef.Name);
+    return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+}
+
+static int UnknownCommand(string command)
+{
+    Console.Error.WriteLine($"Unknown command: {command}");
+    PrintUsage();
+    return 1;
+}
+
+static void PrintUsage()
+{
+    Console.Error.WriteLine("Usage:");
+    Console.Error.WriteLine("  dotforge run <path-to-managed-assembly>");
+    Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
+    Console.Error.WriteLine("  dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
 }

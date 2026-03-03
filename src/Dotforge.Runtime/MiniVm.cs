@@ -11,6 +11,10 @@ public sealed class MiniVm
 {
     private readonly GenerationalHeap _heap = new();
     private readonly Dictionary<CallSiteCacheKey, MethodDefinitionHandle> _virtualCallCache = [];
+    public Action<string>? GcLogger
+    {
+        set => _heap.Logger = value;
+    }
 
     public int ExecuteEntryPoint(ManagedAssembly assembly)
     {
@@ -194,6 +198,13 @@ public sealed class MiniVm
                         frame.Stack.Push(ReadUserString(metadata, (int)instruction.Operand!));
                         ip++;
                         break;
+                    case IlOpCode.Ldlen:
+                    {
+                        var array = RequireDotArray(frame.Stack.Pop());
+                        frame.Stack.Push(array.Length);
+                        ip++;
+                        break;
+                    }
 
                     case IlOpCode.Pop:
                         frame.Stack.Pop();
@@ -323,6 +334,69 @@ public sealed class MiniVm
                     {
                         var thrown = frame.Stack.Pop();
                         throw BuildManagedException(thrown);
+                    }
+                    case IlOpCode.Newarr:
+                    {
+                        var length = PopInt(frame.Stack);
+                        var elementType = ResolveTypeNameFromToken(metadata, (int)instruction.Operand!);
+                        frame.Stack.Push(new DotArray(elementType, length));
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.LdelemI4:
+                    {
+                        var index = PopInt(frame.Stack);
+                        var array = RequireDotArray(frame.Stack.Pop());
+                        frame.Stack.Push(Convert.ToInt32(array.Get(index)));
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.StelemI4:
+                    {
+                        var value = PopInt(frame.Stack);
+                        var index = PopInt(frame.Stack);
+                        var array = RequireDotArray(frame.Stack.Pop());
+                        array.Set(index, value);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.LdelemRef:
+                    {
+                        var index = PopInt(frame.Stack);
+                        var array = RequireDotArray(frame.Stack.Pop());
+                        frame.Stack.Push(array.Get(index));
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.StelemRef:
+                    {
+                        var value = frame.Stack.Pop();
+                        var index = PopInt(frame.Stack);
+                        var array = RequireDotArray(frame.Stack.Pop());
+                        array.Set(index, value);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Box:
+                    {
+                        var value = frame.Stack.Pop();
+                        var boxed = BoxValue(metadata, (int)instruction.Operand!, value);
+                        frame.Stack.Push(boxed);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Unbox:
+                    case IlOpCode.UnboxAny:
+                    {
+                        var boxed = frame.Stack.Pop();
+                        var unboxed = UnboxValue(metadata, (int)instruction.Operand!, boxed);
+                        frame.Stack.Push(unboxed);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Calli:
+                    {
+                        throw new NotSupportedException("calli is decoded but not yet executable in Dotforge VM.");
                     }
 
                     case IlOpCode.Ret:
@@ -852,6 +926,16 @@ public sealed class MiniVm
         return dotObject;
     }
 
+    private static DotArray RequireDotArray(object? value)
+    {
+        if (value is not DotArray dotArray)
+        {
+            throw new NullReferenceException("Object reference is null or not a managed DotArray.");
+        }
+
+        return dotArray;
+    }
+
     private static int Jump(IReadOnlyDictionary<int, int> offsetToIndex, int targetOffset)
     {
         if (!offsetToIndex.TryGetValue(targetOffset, out var index))
@@ -891,6 +975,12 @@ public sealed class MiniVm
         };
     }
 
+    private static string ResolveTypeNameFromToken(MetadataReader metadata, int token)
+    {
+        var handle = MetadataTokens.EntityHandle(token);
+        return ReadTypeName(metadata, handle);
+    }
+
     private static string ReadTypeName(MetadataReader metadata, TypeReferenceHandle typeHandle)
     {
         var typeRef = metadata.GetTypeReference(typeHandle);
@@ -912,8 +1002,36 @@ public sealed class MiniVm
             int i => i != 0,
             long l => l != 0,
             DotObject => true,
+            DotArray => true,
             _ => true
         };
+    }
+
+    private static object? BoxValue(MetadataReader metadata, int typeToken, object? value)
+    {
+        var typeName = ResolveTypeNameFromToken(metadata, typeToken);
+        if (string.Equals(typeName, "System.Int32", StringComparison.Ordinal))
+        {
+            return Convert.ToInt32(value);
+        }
+
+        return value;
+    }
+
+    private static object? UnboxValue(MetadataReader metadata, int typeToken, object? boxed)
+    {
+        var typeName = ResolveTypeNameFromToken(metadata, typeToken);
+        if (string.Equals(typeName, "System.Int32", StringComparison.Ordinal))
+        {
+            return Convert.ToInt32(boxed);
+        }
+
+        if (string.Equals(typeName, "System.String", StringComparison.Ordinal))
+        {
+            return boxed?.ToString();
+        }
+
+        return boxed;
     }
 
     private static bool IsWithinRange(int offset, int start, int length)

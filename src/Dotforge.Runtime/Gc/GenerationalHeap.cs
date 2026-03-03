@@ -7,6 +7,10 @@ internal sealed class GenerationalHeap
     private readonly HashSet<DotObject> _young = [];
     private readonly HashSet<DotObject> _old = [];
     private readonly HashSet<DotObject> _rememberedOld = [];
+    private long _minorCollections;
+    private long _majorCollections;
+
+    public Action<string>? Logger { get; set; }
 
     public DotObject AllocateObject(TypeDefinitionHandle typeHandle, string typeName, IEnumerable<string> fields)
     {
@@ -30,6 +34,8 @@ internal sealed class GenerationalHeap
 
     public void CollectMinor(IEnumerable<DotObject> roots)
     {
+        _minorCollections++;
+        var youngBefore = _young.Count;
         var markStack = new Stack<DotObject>();
         foreach (var root in roots)
         {
@@ -59,10 +65,15 @@ internal sealed class GenerationalHeap
         }
 
         _rememberedOld.RemoveWhere(static x => x is null);
+        var youngAfter = _young.Count;
+        var collected = youngBefore - youngAfter;
+        Logger?.Invoke($"[GC] minor #{_minorCollections}: collected={collected}, young={youngAfter}, old={_old.Count}");
     }
 
     public void CollectMajor(IEnumerable<DotObject> roots)
     {
+        _majorCollections++;
+        var before = _young.Count + _old.Count;
         var markStack = new Stack<DotObject>();
         foreach (var root in roots)
         {
@@ -72,6 +83,9 @@ internal sealed class GenerationalHeap
         SweepAndCompact(_young);
         SweepAndCompact(_old);
         _rememberedOld.RemoveWhere(oldObj => !_old.Contains(oldObj));
+        var after = _young.Count + _old.Count;
+        var collected = before - after;
+        Logger?.Invoke($"[GC] major #{_majorCollections}: collected={collected}, young={_young.Count}, old={_old.Count}");
     }
 
     private static void MarkYoungReachable(DotObject obj, Stack<DotObject> stack)
