@@ -544,6 +544,14 @@ public sealed class MiniVm
             }
         }
 
+        if (string.Equals(ns, "System", StringComparison.Ordinal) && string.Equals(typeName, "Object", StringComparison.Ordinal))
+        {
+            if (string.Equals(name, ".ctor", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
         if (string.Equals(ns, "System", StringComparison.Ordinal) && string.Equals(typeName, "String", StringComparison.Ordinal))
         {
             if (string.Equals(name, "Concat", StringComparison.Ordinal))
