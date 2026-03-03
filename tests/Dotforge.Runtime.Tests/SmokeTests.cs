@@ -60,8 +60,7 @@ public sealed class SmokeTests
         var assemblyPath = Compile(source);
         using var assembly = ManagedAssembly.Load(assemblyPath);
         AssertMethodContainsOpcodes(assembly, "Program::Main", IlOpCode.Ldstr);
-        AssertMethodContainsAnyOpcode(assembly, "Program::Main", IlOpCode.Brtrue, IlOpCode.BrtrueS);
-        AssertMethodContainsAnyOpcode(assembly, "Program::Main", IlOpCode.Brfalse, IlOpCode.BrfalseS);
+        AssertMethodContainsAnyOpcode(assembly, "Program::Main", IlOpCode.Brtrue, IlOpCode.BrtrueS, IlOpCode.Brfalse, IlOpCode.BrfalseS);
         var vm = new MiniVm();
         var result = vm.ExecuteEntryPoint(assembly);
         Xunit.Assert.Equal(11, result);
@@ -170,7 +169,7 @@ public sealed class SmokeTests
     }
 
     [Xunit.Fact]
-    public void DecodesCalliAndThrowsNotSupportedAtRuntime()
+    public void ExecutesCalliViaFunctionPointer()
     {
         var source = """
             using System;
@@ -189,9 +188,10 @@ public sealed class SmokeTests
 
         var assemblyPath = Compile(source, allowUnsafe: true);
         using var assembly = ManagedAssembly.Load(assemblyPath);
-        AssertMethodContainsOpcodes(assembly, "Program::Main", IlOpCode.Calli);
+        AssertMethodContainsOpcodes(assembly, "Program::Main", IlOpCode.Calli, IlOpCode.Ldftn);
         var vm = new MiniVm();
-        Xunit.Assert.Throws<NotSupportedException>(() => vm.ExecuteEntryPoint(assembly));
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(42, result);
     }
 
     private static void AssertMethodContainsOpcodes(ManagedAssembly assembly, string methodSpec, params IlOpCode[] expected)
@@ -270,7 +270,7 @@ public sealed class SmokeTests
             syntaxTrees: [tree],
             references: refs,
             options: new CSharpCompilationOptions(
-                outputKind: OutputKind.DynamicallyLinkedLibrary,
+                outputKind: OutputKind.ConsoleApplication,
                 optimizationLevel: OptimizationLevel.Debug,
                 nullableContextOptions: NullableContextOptions.Enable,
                 allowUnsafe: allowUnsafe));

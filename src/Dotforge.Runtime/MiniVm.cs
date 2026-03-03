@@ -335,6 +335,12 @@ public sealed class MiniVm
                         var thrown = frame.Stack.Pop();
                         throw BuildManagedException(thrown);
                     }
+                    case IlOpCode.Ldftn:
+                    {
+                        frame.Stack.Push((int)instruction.Operand!);
+                        ip++;
+                        break;
+                    }
                     case IlOpCode.Newarr:
                     {
                         var length = PopInt(frame.Stack);
@@ -396,7 +402,9 @@ public sealed class MiniVm
                     }
                     case IlOpCode.Calli:
                     {
-                        throw new NotSupportedException("calli is decoded but not yet executable in Dotforge VM.");
+                        ExecuteCalli(assembly, caches, frame.Stack, (int)instruction.Operand!);
+                        ip++;
+                        break;
                     }
 
                     case IlOpCode.Ret:
@@ -468,6 +476,34 @@ public sealed class MiniVm
         }
 
         throw new NotSupportedException($"Unsupported call target kind: {handle.Kind}.");
+    }
+
+    private void ExecuteCalli(ManagedAssembly assembly, RuntimeCaches caches, Stack<object?> stack, int signatureToken)
+    {
+        var metadata = assembly.Metadata;
+        var sigHandle = MetadataTokens.EntityHandle(signatureToken);
+        if (sigHandle.Kind != HandleKind.StandaloneSignature)
+        {
+            throw new NotSupportedException($"calli expects StandaloneSignature token, got {sigHandle.Kind}.");
+        }
+
+        var standaloneSig = metadata.GetStandaloneSignature((StandaloneSignatureHandle)sigHandle);
+        var signature = ReadMethodSignature(metadata, standaloneSig.Signature);
+        var totalArgs = signature.ParameterCount + (signature.IsInstance ? 1 : 0);
+        var args = PopArguments(stack, totalArgs);
+        var functionPointer = stack.Pop();
+        var targetToken = Convert.ToInt32(functionPointer);
+        var targetHandle = MetadataTokens.EntityHandle(targetToken);
+        if (targetHandle.Kind != HandleKind.MethodDefinition)
+        {
+            throw new NotSupportedException($"calli target must be MethodDefinition token, got {targetHandle.Kind}.");
+        }
+
+        var result = ExecuteMethod(assembly, caches, (MethodDefinitionHandle)targetHandle, args);
+        if (!signature.ReturnsVoid)
+        {
+            stack.Push(result);
+        }
     }
 
     private void ExecuteCallVirt(ManagedAssembly assembly, RuntimeCaches caches, Stack<object?> stack, int token)

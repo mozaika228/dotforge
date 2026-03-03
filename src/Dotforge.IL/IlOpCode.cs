@@ -64,6 +64,7 @@ public enum IlOpCode
     StelemI4,
     LdelemRef,
     StelemRef,
+    Ldftn,
     Ldfld,
     Stfld,
     Newobj,
