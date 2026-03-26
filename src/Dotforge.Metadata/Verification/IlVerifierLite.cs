@@ -93,20 +93,39 @@ public static class IlVerifierLite
                     case 0xDC: // endfault
                         break;
 
-                    case 0x06: case 0x07: case 0x08: case 0x09: // ldloc.*
-                    case 0x02: case 0x03: case 0x04: case 0x05: // ldarg.*
-                    case 0x15: case 0x16: case 0x17: case 0x18:
-                    case 0x19: case 0x1A: case 0x1B: case 0x1C:
-                    case 0x1D: case 0x1E: case 0x14: // ldc + ldnull
+                    case 0x06: // ldloc.0
+                    case 0x07: // ldloc.1
+                    case 0x08: // ldloc.2
+                    case 0x09: // ldloc.3
+                    case 0x02: // ldarg.0
+                    case 0x03: // ldarg.1
+                    case 0x04: // ldarg.2
+                    case 0x05: // ldarg.3
+                    case 0x15:
+                    case 0x16:
+                    case 0x17:
+                    case 0x18:
+                    case 0x19:
+                    case 0x1A:
+                    case 0x1B:
+                    case 0x1C:
+                    case 0x1D:
+                    case 0x1E:
+                    case 0x14: // ldc + ldnull
                         stack += 1;
                         break;
 
-                    case 0x0A: case 0x0B: case 0x0C: case 0x0D: // stloc.*
+                    case 0x0A:
+                    case 0x0B:
+                    case 0x0C:
+                    case 0x0D: // stloc.*
                     case 0x26: // pop
                         stack -= 1;
                         break;
 
-                    case 0x0E: case 0x11: case 0x13: // ldarg.s ldloc.s stloc.s
+                    case 0x0E:
+                    case 0x11:
+                    case 0x13: // ldarg.s ldloc.s stloc.s
                         if (!EnsureBytes(il, offset, 1, token, methodName, report))
                         {
                             return;
@@ -157,16 +176,24 @@ public static class IlVerifierLite
                         offset += 4;
                         break;
 
-                    case 0x58: case 0x59: case 0x5A: case 0x5B: // add/sub/mul/div
-                    case 0x94: case 0x9A: // ldelem
-                    case 0x9E: case 0xA2: // stelem
+                    case 0x58:
+                    case 0x59:
+                    case 0x5A:
+                    case 0x5B: // add/sub/mul/div
+                    case 0x94:
+                    case 0x9A: // ldelem
+                    case 0x9E:
+                    case 0xA2: // stelem
                         stack -= 1;
                         break;
 
                     case 0x8E: // ldlen
                         break;
 
-                    case 0x2B: case 0x2C: case 0x2D: case 0xDE: // short branches incl leave.s
+                    case 0x2B:
+                    case 0x2C:
+                    case 0x2D:
+                    case 0xDE: // short branches incl leave.s
                     {
                         if (!EnsureBytes(il, offset, 1, token, methodName, report))
                         {
@@ -183,7 +210,10 @@ public static class IlVerifierLite
                         break;
                     }
 
-                    case 0x38: case 0x39: case 0x3A: case 0xDD: // long branches incl leave
+                    case 0x38:
+                    case 0x39:
+                    case 0x3A:
+                    case 0xDD: // long branches incl leave
                     {
                         if (!EnsureBytes(il, offset, 4, token, methodName, report))
                         {
