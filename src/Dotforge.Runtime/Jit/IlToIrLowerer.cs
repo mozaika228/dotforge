@@ -60,6 +60,20 @@ public static class IlToIrLowerer
                 case IlOpCode.LdcI4:
                     PushConst(Convert.ToInt32(il.Operand), instructions, eval, ref temp);
                     break;
+                case IlOpCode.Ldnull:
+                case IlOpCode.Ldstr:
+                    PushUnknown(instructions, eval, ref temp);
+                    break;
+                case IlOpCode.Dup:
+                {
+                    var top = PopOrUnknown(instructions, eval, ref temp);
+                    eval.Push(top);
+                    eval.Push(top);
+                    break;
+                }
+                case IlOpCode.Pop:
+                    _ = PopOrUnknown(instructions, eval, ref temp);
+                    break;
 
                 case IlOpCode.Ldarg0:
                     PushArg(0, instructions, eval, ref temp);
@@ -96,20 +110,20 @@ public static class IlToIrLowerer
                     break;
 
                 case IlOpCode.Stloc0:
-                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: eval.Pop(), LocalIndex: 0));
+                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: PopOrUnknown(instructions, eval, ref temp), LocalIndex: 0));
                     break;
                 case IlOpCode.Stloc1:
-                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: eval.Pop(), LocalIndex: 1));
+                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: PopOrUnknown(instructions, eval, ref temp), LocalIndex: 1));
                     break;
                 case IlOpCode.Stloc2:
-                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: eval.Pop(), LocalIndex: 2));
+                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: PopOrUnknown(instructions, eval, ref temp), LocalIndex: 2));
                     break;
                 case IlOpCode.Stloc3:
-                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: eval.Pop(), LocalIndex: 3));
+                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: PopOrUnknown(instructions, eval, ref temp), LocalIndex: 3));
                     break;
                 case IlOpCode.StlocS:
                 case IlOpCode.Stloc:
-                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: eval.Pop(), LocalIndex: Convert.ToInt32(il.Operand)));
+                    instructions.Add(new IrInstruction(IrOpCode.StoreLocal, Left: PopOrUnknown(instructions, eval, ref temp), LocalIndex: Convert.ToInt32(il.Operand)));
                     break;
 
                 case IlOpCode.Add:
@@ -140,15 +154,37 @@ public static class IlToIrLowerer
                     break;
                 case IlOpCode.Brtrue:
                 case IlOpCode.BrtrueS:
-                    instructions.Add(new IrInstruction(IrOpCode.BrTrue, Left: eval.Pop(), Label: labels[Convert.ToInt32(il.Operand)]));
+                    instructions.Add(new IrInstruction(IrOpCode.BrTrue, Left: PopOrUnknown(instructions, eval, ref temp), Label: labels[Convert.ToInt32(il.Operand)]));
                     break;
                 case IlOpCode.Brfalse:
                 case IlOpCode.BrfalseS:
-                    instructions.Add(new IrInstruction(IrOpCode.BrFalse, Left: eval.Pop(), Label: labels[Convert.ToInt32(il.Operand)]));
+                    instructions.Add(new IrInstruction(IrOpCode.BrFalse, Left: PopOrUnknown(instructions, eval, ref temp), Label: labels[Convert.ToInt32(il.Operand)]));
+                    break;
+
+                case IlOpCode.Call:
+                case IlOpCode.Callvirt:
+                case IlOpCode.Calli:
+                case IlOpCode.Newobj:
+                case IlOpCode.Newarr:
+                case IlOpCode.LdelemI4:
+                case IlOpCode.LdelemRef:
+                case IlOpCode.Ldfld:
+                case IlOpCode.Box:
+                case IlOpCode.Unbox:
+                case IlOpCode.UnboxAny:
+                    // In ryujit-lite planning mode, represent complex operations as unknown value producers.
+                    PushUnknown(instructions, eval, ref temp);
+                    break;
+                case IlOpCode.StelemI4:
+                case IlOpCode.StelemRef:
+                case IlOpCode.Stfld:
+                case IlOpCode.Throw:
+                    // Complex sink operations consume stack values but do not produce one.
+                    _ = PopOrUnknown(instructions, eval, ref temp);
                     break;
 
                 case IlOpCode.Ret:
-                    instructions.Add(new IrInstruction(IrOpCode.Ret, Left: eval.Count > 0 ? eval.Pop() : null));
+                    instructions.Add(new IrInstruction(IrOpCode.Ret, Left: eval.Count > 0 ? PopOrUnknown(instructions, eval, ref temp) : null));
                     break;
 
                 default:
@@ -188,10 +224,29 @@ public static class IlToIrLowerer
 
     private static void EmitBinary(IrOpCode opCode, List<IrInstruction> instructions, Stack<int> eval, ref int temp)
     {
-        var right = eval.Pop();
-        var left = eval.Pop();
+        var right = PopOrUnknown(instructions, eval, ref temp);
+        var left = PopOrUnknown(instructions, eval, ref temp);
         var dest = temp++;
         instructions.Add(new IrInstruction(opCode, Dest: dest, Left: left, Right: right));
         eval.Push(dest);
+    }
+
+    private static int PopOrUnknown(List<IrInstruction> instructions, Stack<int> eval, ref int temp)
+    {
+        if (eval.Count > 0)
+        {
+            return eval.Pop();
+        }
+
+        var unknown = temp++;
+        instructions.Add(new IrInstruction(IrOpCode.ConstI4, Dest: unknown, Immediate: 0));
+        return unknown;
+    }
+
+    private static void PushUnknown(List<IrInstruction> instructions, Stack<int> eval, ref int temp)
+    {
+        var unknown = temp++;
+        instructions.Add(new IrInstruction(IrOpCode.ConstI4, Dest: unknown, Immediate: 0));
+        eval.Push(unknown);
     }
 }
