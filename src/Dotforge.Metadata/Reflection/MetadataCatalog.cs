@@ -96,8 +96,10 @@ public sealed class MetadataCatalog
     private static Dictionary<int, IReadOnlyList<string>> BuildGenericParametersByOwner(MetadataReader metadata)
     {
         var map = new Dictionary<int, List<string>>();
-        foreach (var gpHandle in metadata.GenericParameters)
+        var rowCount = metadata.GetTableRowCount(TableIndex.GenericParam);
+        for (var rowId = 1; rowId <= rowCount; rowId++)
         {
+            var gpHandle = MetadataTokens.GenericParameterHandle(rowId);
             var gp = metadata.GetGenericParameter(gpHandle);
             var ownerToken = MetadataTokens.GetToken(gp.Parent);
             if (!map.TryGetValue(ownerToken, out var list))
