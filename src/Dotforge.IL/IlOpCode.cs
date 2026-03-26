@@ -54,6 +54,8 @@ public enum IlOpCode
     Ceq,
     Cgt,
     Clt,
+    Isinst,
+    Endfilter,
     Endfinally,
     Endfault,
     Throw,

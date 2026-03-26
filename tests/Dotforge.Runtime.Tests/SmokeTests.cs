@@ -262,6 +262,76 @@ public sealed class SmokeTests
     }
 
     [Xunit.Fact]
+    public void HandlesExceptionFilterAndFallbackCatch()
+    {
+        var source = """
+            using System;
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    try
+                    {
+                        throw new Exception("boom");
+                    }
+                    catch (Exception ex) when (ex.Message == "nope")
+                    {
+                        return 1;
+                    }
+                    catch (Exception ex) when (ex.Message == "boom")
+                    {
+                        return 42;
+                    }
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var assembly = ManagedAssembly.Load(assemblyPath);
+        var vm = new MiniVm();
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(42, result);
+    }
+
+    [Xunit.Fact]
+    public void ExecutesFinallyBeforeFilterCatchHandler()
+    {
+        var source = """
+            using System;
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    int x = 0;
+                    try
+                    {
+                        try
+                        {
+                            throw new Exception("boom");
+                        }
+                        finally
+                        {
+                            x = 7;
+                        }
+                    }
+                    catch (Exception ex) when (ex.Message == "boom")
+                    {
+                        return x;
+                    }
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var assembly = ManagedAssembly.Load(assemblyPath);
+        var vm = new MiniVm();
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(7, result);
+    }
+
+    [Xunit.Fact]
     public void ExecutesPInvokeInteropCalls()
     {
         var source = """

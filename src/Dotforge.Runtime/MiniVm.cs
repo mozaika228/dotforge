@@ -97,6 +97,7 @@ public sealed class MiniVm
                         break;
                     case IlOpCode.Endfinally:
                     case IlOpCode.Endfault:
+                    case IlOpCode.Endfilter:
                         ip++;
                         break;
 
@@ -421,6 +422,14 @@ public sealed class MiniVm
                         var value = frame.Stack.Pop();
                         var boxed = BoxValue(metadata, (int)instruction.Operand!, value);
                         frame.Stack.Push(boxed);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Isinst:
+                    {
+                        var value = frame.Stack.Pop();
+                        var typeName = ResolveTypeNameFromToken(metadata, (int)instruction.Operand!);
+                        frame.Stack.Push(IsInstanceOfTypeName(value, typeName) ? value : null);
                         ip++;
                         break;
                     }
@@ -880,35 +889,278 @@ public sealed class MiniVm
         var unwindHandlers = GetUnwindHandlersForException(regions, faultOffset).ToArray();
         ExecuteUnwindHandlers(frame, unwindHandlers);
 
-        var catchCandidates = regions
-            .Where(r => r.Kind == ExceptionRegionKind.Catch)
+        var candidates = regions
+            .Where(r => r.Kind is ExceptionRegionKind.Catch or ExceptionRegionKind.Filter)
             .Where(r => IsWithinRange(faultOffset, r.TryOffset, r.TryLength))
             .OrderBy(r => r.TryLength);
 
-        var catchFound = false;
-        ExceptionRegion catchTarget = default;
-        foreach (var candidate in catchCandidates)
+        var handlerFound = false;
+        ExceptionRegion handlerTarget = default;
+        foreach (var candidate in candidates)
         {
-            if (!CatchMatches(frame.Assembly.Metadata, candidate, exception))
+            var matched = candidate.Kind switch
+            {
+                ExceptionRegionKind.Catch => CatchMatches(frame.Assembly.Metadata, candidate, exception),
+                ExceptionRegionKind.Filter => EvaluateFilterRegion(frame, candidate, exception),
+                _ => false
+            };
+
+            if (!matched)
             {
                 continue;
             }
 
-            catchFound = true;
-            catchTarget = candidate;
+            handlerFound = true;
+            handlerTarget = candidate;
             break;
         }
 
-        if (catchFound)
+        if (handlerFound)
         {
             frame.Stack.Clear();
             frame.Stack.Push(exception);
-            nextIp = Jump(frame.OffsetToIndex, catchTarget.HandlerOffset);
+            nextIp = Jump(frame.OffsetToIndex, handlerTarget.HandlerOffset);
             return true;
         }
 
         nextIp = -1;
         return false;
+    }
+
+    private bool EvaluateFilterRegion(ExecutionFrame frame, ExceptionRegion region, Exception exception)
+    {
+        var savedLocals = (object?[])frame.Locals.Clone();
+        var savedStack = frame.Stack.Reverse().ToArray();
+        frame.Stack.Clear();
+        frame.Stack.Push(exception);
+
+        try
+        {
+            var filterStart = region.FilterOffset;
+            var handlerStart = region.HandlerOffset;
+            var ip = Jump(frame.OffsetToIndex, filterStart);
+
+            while (ip < frame.Instructions.Count)
+            {
+                var instruction = frame.Instructions[ip];
+                if (instruction.Offset >= handlerStart)
+                {
+                    break;
+                }
+
+                switch (instruction.OpCode)
+                {
+                    case IlOpCode.Nop:
+                        ip++;
+                        break;
+                    case IlOpCode.Endfilter:
+                        return IsTrue(frame.Stack.Count > 0 ? frame.Stack.Pop() : 0);
+                    case IlOpCode.Dup:
+                    {
+                        var value = frame.Stack.Peek();
+                        frame.Stack.Push(value);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Pop:
+                        _ = frame.Stack.Pop();
+                        ip++;
+                        break;
+
+                    case IlOpCode.Ldarg0:
+                        frame.Stack.Push(ReadArg(frame.Args, 0));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldarg1:
+                        frame.Stack.Push(ReadArg(frame.Args, 1));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldarg2:
+                        frame.Stack.Push(ReadArg(frame.Args, 2));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldarg3:
+                        frame.Stack.Push(ReadArg(frame.Args, 3));
+                        ip++;
+                        break;
+                    case IlOpCode.LdargS:
+                    case IlOpCode.Ldarg:
+                        frame.Stack.Push(ReadArg(frame.Args, Convert.ToInt32(instruction.Operand)));
+                        ip++;
+                        break;
+
+                    case IlOpCode.Ldloc0:
+                        frame.Stack.Push(ReadLocal(frame, 0));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldloc1:
+                        frame.Stack.Push(ReadLocal(frame, 1));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldloc2:
+                        frame.Stack.Push(ReadLocal(frame, 2));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldloc3:
+                        frame.Stack.Push(ReadLocal(frame, 3));
+                        ip++;
+                        break;
+                    case IlOpCode.LdlocS:
+                    case IlOpCode.Ldloc:
+                        frame.Stack.Push(ReadLocal(frame, Convert.ToInt32(instruction.Operand)));
+                        ip++;
+                        break;
+
+                    case IlOpCode.Stloc0:
+                        WriteLocal(frame, 0, frame.Stack.Pop());
+                        ip++;
+                        break;
+                    case IlOpCode.Stloc1:
+                        WriteLocal(frame, 1, frame.Stack.Pop());
+                        ip++;
+                        break;
+                    case IlOpCode.Stloc2:
+                        WriteLocal(frame, 2, frame.Stack.Pop());
+                        ip++;
+                        break;
+                    case IlOpCode.Stloc3:
+                        WriteLocal(frame, 3, frame.Stack.Pop());
+                        ip++;
+                        break;
+                    case IlOpCode.StlocS:
+                    case IlOpCode.Stloc:
+                        WriteLocal(frame, Convert.ToInt32(instruction.Operand), frame.Stack.Pop());
+                        ip++;
+                        break;
+
+                    case IlOpCode.LdcI4M1:
+                        frame.Stack.Push(-1);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_0:
+                        frame.Stack.Push(0);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_1:
+                        frame.Stack.Push(1);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_2:
+                        frame.Stack.Push(2);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_3:
+                        frame.Stack.Push(3);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_4:
+                        frame.Stack.Push(4);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_5:
+                        frame.Stack.Push(5);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_6:
+                        frame.Stack.Push(6);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_7:
+                        frame.Stack.Push(7);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4_8:
+                        frame.Stack.Push(8);
+                        ip++;
+                        break;
+                    case IlOpCode.LdcI4S:
+                    case IlOpCode.LdcI4:
+                        frame.Stack.Push(Convert.ToInt32(instruction.Operand));
+                        ip++;
+                        break;
+                    case IlOpCode.Ldnull:
+                        frame.Stack.Push(null);
+                        ip++;
+                        break;
+                    case IlOpCode.Ldstr:
+                        frame.Stack.Push(ReadUserString(frame.Assembly.Metadata, (int)instruction.Operand!));
+                        ip++;
+                        break;
+                    case IlOpCode.Isinst:
+                    {
+                        var value = frame.Stack.Pop();
+                        var typeName = ResolveTypeNameFromToken(frame.Assembly.Metadata, (int)instruction.Operand!);
+                        frame.Stack.Push(IsInstanceOfTypeName(value, typeName) ? value : null);
+                        ip++;
+                        break;
+                    }
+
+                    case IlOpCode.Ceq:
+                    {
+                        var right = frame.Stack.Pop();
+                        var left = frame.Stack.Pop();
+                        frame.Stack.Push(Equals(left, right) ? 1 : 0);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Cgt:
+                    {
+                        var right = PopInt(frame.Stack);
+                        var left = PopInt(frame.Stack);
+                        frame.Stack.Push(left > right ? 1 : 0);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Clt:
+                    {
+                        var right = PopInt(frame.Stack);
+                        var left = PopInt(frame.Stack);
+                        frame.Stack.Push(left < right ? 1 : 0);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.Br:
+                    case IlOpCode.BrS:
+                        ip = Jump(frame.OffsetToIndex, (int)instruction.Operand!);
+                        break;
+                    case IlOpCode.Brfalse:
+                    case IlOpCode.BrfalseS:
+                    {
+                        var c = frame.Stack.Pop();
+                        ip = !IsTrue(c) ? Jump(frame.OffsetToIndex, (int)instruction.Operand!) : ip + 1;
+                        break;
+                    }
+                    case IlOpCode.Brtrue:
+                    case IlOpCode.BrtrueS:
+                    {
+                        var c = frame.Stack.Pop();
+                        ip = IsTrue(c) ? Jump(frame.OffsetToIndex, (int)instruction.Operand!) : ip + 1;
+                        break;
+                    }
+                    case IlOpCode.Call:
+                        ExecuteCall(frame.Assembly, frame.Caches, frame.Stack, (int)instruction.Operand!);
+                        ip++;
+                        break;
+                    case IlOpCode.Callvirt:
+                        ExecuteCallVirt(frame.Assembly, frame.Caches, frame.Stack, (int)instruction.Operand!);
+                        ip++;
+                        break;
+                    default:
+                        return false;
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            Array.Copy(savedLocals, frame.Locals, savedLocals.Length);
+            frame.Stack.Clear();
+            foreach (var item in savedStack)
+            {
+                frame.Stack.Push(item);
+            }
+        }
     }
 
     private int HandleLeave(ExecutionFrame frame, int currentOffset, int targetOffset)
@@ -1454,6 +1706,41 @@ public sealed class MiniVm
             DotArray => true,
             _ => true
         };
+    }
+
+    private static bool IsInstanceOfTypeName(object? value, string typeName)
+    {
+        if (value is null)
+        {
+            return false;
+        }
+
+        if (value is DotObject dotObject)
+        {
+            return string.Equals(dotObject.TypeName, typeName, StringComparison.Ordinal);
+        }
+
+        if (value is DotArray && string.Equals(typeName, "System.Array", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var type = value.GetType();
+        if (string.Equals(type.FullName, typeName, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        while (type.BaseType is not null)
+        {
+            type = type.BaseType;
+            if (string.Equals(type.FullName, typeName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static object? BoxValue(MetadataReader metadata, int typeToken, object? value)

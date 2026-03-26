@@ -31,7 +31,7 @@ flowchart LR
   - arrays (`newarr`, `ldlen`, `ldelem.i4`, `stelem.i4`, `ldelem.ref`, `stelem.ref`)
   - boxing (`box`, `unbox`, `unbox.any`)
   - calls (`call`, `callvirt`, `calli` baseline for `ldftn` function pointers)
-  - exceptions (`throw`, catch-region handling baseline)
+  - exceptions (`throw`, `try/catch/finally`, exception filters baseline)
 - Inline cache for `callvirt` dispatch (`method token + runtime type`).
 - Runtime object model for `int32`, `string`, object instances, and arrays.
 - Full GC runtime model (current implementation scope):

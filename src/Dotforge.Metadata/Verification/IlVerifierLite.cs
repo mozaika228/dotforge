@@ -77,7 +77,7 @@ public static class IlVerifierLite
                         offset += 2;
                         stack -= 1;
                         break;
-                    case 0x11: // endfinally
+                    case 0x11: // endfilter
                         break;
                     default:
                         report.AddWarning("IL000W", $"Method 0x{token:X8} {methodName}: unsupported extended opcode 0xFE{ext:X2}.");
@@ -90,7 +90,7 @@ public static class IlVerifierLite
                 {
                     case 0x00: // nop
                     case 0x2A: // ret
-                    case 0xDC: // endfault
+                    case 0xDC: // endfinally/endfault
                         break;
 
                     case 0x06: // ldloc.0
