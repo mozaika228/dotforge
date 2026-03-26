@@ -101,6 +101,26 @@ public sealed class RuntimeServicesTests
         Xunit.Assert.Equal(42, snapshot.LastExitCode);
     }
 
+    [Xunit.Fact]
+    public void VerifiedRunExecutesForValidAssembly()
+    {
+        var source = """
+            public static class Program
+            {
+                public static int Main() => 42;
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var host = RuntimeHost.Load(assemblyPath);
+
+        var preflight = host.VerifyPreflight();
+        Xunit.Assert.False(preflight.HasErrors);
+
+        var exitCode = host.RunEntryPointVerified(requireResolvedReferences: true);
+        Xunit.Assert.Equal(42, exitCode);
+    }
+
     private static string Compile(string source)
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "dotforge-tests");

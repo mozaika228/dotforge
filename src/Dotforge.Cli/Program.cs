@@ -27,20 +27,40 @@ return command switch
 
 static int Run(string[] args)
 {
-    if (args.Length != 2)
+    if (args.Length is < 2 or > 4)
     {
-        Console.Error.WriteLine("Usage: dotforge run <path-to-managed-assembly>");
+        Console.Error.WriteLine("Usage: dotforge run <path-to-managed-assembly> [--verify] [--strict-warnings]");
         return 1;
     }
 
-    using var assembly = ManagedAssembly.Load(args[1]);
-    var vm = new MiniVm();
+    var verify = args.Skip(2).Any(static x => string.Equals(x, "--verify", StringComparison.OrdinalIgnoreCase));
+    var strictWarnings = args.Skip(2).Any(static x => string.Equals(x, "--strict-warnings", StringComparison.OrdinalIgnoreCase));
+    using var host = RuntimeHost.Load(args[1]);
     if (string.Equals(Environment.GetEnvironmentVariable("DOTFORGE_GC_LOG"), "1", StringComparison.Ordinal))
     {
-        vm.GcLogger = Console.Error.WriteLine;
+        host.Vm.GcLogger = Console.Error.WriteLine;
     }
 
-    return vm.ExecuteEntryPoint(assembly);
+    if (!verify)
+    {
+        return host.RunEntryPoint();
+    }
+
+    var preflight = host.VerifyPreflight();
+    foreach (var unresolved in preflight.UnresolvedReferences)
+    {
+        Console.Error.WriteLine($"[warn] unresolved-reference: {unresolved}");
+    }
+
+    foreach (var message in preflight.MetadataReport.Messages.Concat(preflight.IlReport.Messages))
+    {
+        var level = message.IsError ? "error" : "warn";
+        Console.Error.WriteLine($"[{level}] {message.Code}: {message.Message}");
+    }
+
+    return host.RunEntryPointVerified(
+        failOnWarnings: strictWarnings,
+        requireResolvedReferences: true);
 }
 
 static int RuntimeInfo(string[] args)
@@ -257,7 +277,7 @@ static int UnknownCommand(string command)
 static void PrintUsage()
 {
     Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  dotforge run <path-to-managed-assembly>");
+    Console.Error.WriteLine("  dotforge run <path-to-managed-assembly> [--verify] [--strict-warnings]");
     Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
     Console.Error.WriteLine("  dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
     Console.Error.WriteLine("  dotforge verify <path-to-managed-assembly>");

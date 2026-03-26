@@ -59,6 +59,7 @@ flowchart LR
 ## CLI
 
 - `dotforge run <assembly>`: execute assembly entry point (`Main`).
+  - optional flags: `--verify`, `--strict-warnings`
 - `dotforge inspect <assembly>`: dump metadata types/methods/fields.
 - `dotforge disasm <assembly> <method-token-or-Type::Method>`: dump decoded IL.
 - `dotforge verify <assembly>`: run metadata + IL verification and reference resolution checks.
@@ -68,6 +69,7 @@ Examples:
 
 ```bash
 dotforge run ./samples/Hello.dll
+dotforge run ./samples/Hello.dll --verify
 dotforge inspect ./samples/Hello.dll
 dotforge disasm ./samples/Hello.dll Program::Main
 dotforge runtime ./samples/Hello.dll
