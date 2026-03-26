@@ -35,10 +35,6 @@ jobs:
       - name: Test
         run: dotnet test dotforge.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
-      - name: Format (advisory)
-        continue-on-error: true
-        run: dotnet format dotforge.sln --verify-no-changes --no-restore
-
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:

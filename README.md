@@ -96,7 +96,7 @@ dotnet test dotforge.sln -c Release
   - PowerShell: `./scripts/dev.ps1 <bootstrap|restore|build|test|format|ci>`
   - Bash: `./scripts/dev.sh <bootstrap|restore|build|test|format|ci>`
 - Production release gate: [`Definition of Done`](docs/DEFINITION_OF_DONE.md)
-- CI currently runs `dotnet format` in advisory mode (non-blocking) until full repository normalization is landed.
+- Repository-wide formatting baseline can be generated via GitHub Actions workflow `format-baseline` (manual dispatch).
 
 ## Repository Structure
 
@@ -106,6 +106,7 @@ dotnet test dotforge.sln -c Release
 - `src/Dotforge.Cli`: `run`, `inspect`, `disasm` commands.
 - `tests/Dotforge.Runtime.Tests`: xUnit integration and opcode coverage tests.
 - `.github/workflows/ci.yml`: CI restore/build/test + coverage artifact upload.
+- `.github/workflows/format-baseline.yml`: manual formatting baseline workflow (`dotnet format` + PR).
 
 ## Roadmap
 
