@@ -4,6 +4,7 @@ using Dotforge.Metadata;
 using Dotforge.Metadata.Reflection;
 using Dotforge.Metadata.Verification;
 using Dotforge.Runtime;
+using Dotforge.Runtime.Services;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
@@ -20,6 +21,7 @@ return command switch
     "inspect" => Inspect(args),
     "disasm" => Disasm(args),
     "verify" => Verify(args),
+    "runtime" => RuntimeInfo(args),
     _ => UnknownCommand(command)
 };
 
@@ -41,6 +43,24 @@ static int Run(string[] args)
     return vm.ExecuteEntryPoint(assembly);
 }
 
+static int RuntimeInfo(string[] args)
+{
+    if (args.Length != 2)
+    {
+        Console.Error.WriteLine("Usage: dotforge runtime <path-to-managed-assembly>");
+        return 1;
+    }
+
+    using var host = RuntimeHost.Load(args[1]);
+    var exitCode = host.RunEntryPoint();
+    var snapshot = host.CaptureSnapshot();
+    Console.WriteLine($"runtime: exit={exitCode}");
+    Console.WriteLine($"  types={snapshot.TypeCount} methods={snapshot.MethodCount}");
+    Console.WriteLine($"  jit-plans={snapshot.JitPlanCount}");
+    Console.WriteLine($"  gc: minor={snapshot.GcStats.MinorCollections} major={snapshot.GcStats.MajorCollections} gen0={snapshot.GcStats.Gen0Count} gen1={snapshot.GcStats.Gen1Count} loh={snapshot.GcStats.LohCount}");
+    return exitCode;
+}
+
 static int Inspect(string[] args)
 {
     if (args.Length != 2)
@@ -57,7 +77,8 @@ static int Inspect(string[] args)
         Console.WriteLine($"type 0x{type.Token:X8} {type.FullName}{typeGeneric}");
         foreach (var field in type.Fields)
         {
-            Console.WriteLine($"  field 0x{field.Token:X8} {field.Name}");
+            var mode = field.IsStatic ? "static" : "instance";
+            Console.WriteLine($"  field 0x{field.Token:X8} {mode} {field.Name} : {field.FieldTypeCode}");
         }
 
         foreach (var method in type.Methods)
@@ -223,4 +244,5 @@ static void PrintUsage()
     Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
     Console.Error.WriteLine("  dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
     Console.Error.WriteLine("  dotforge verify <path-to-managed-assembly>");
+    Console.Error.WriteLine("  dotforge runtime <path-to-managed-assembly>");
 }

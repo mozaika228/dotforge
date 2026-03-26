@@ -42,6 +42,7 @@ flowchart LR
 - collection statistics and logging (`DOTFORGE_GC_LOG=1`)
 - Metadata reflection catalog for type/method/field inspection.
 - Runtime type system layer with generic arity and generic instantiation model.
+- Runtime services facade (`RuntimeHost`) for managed execution, reflection queries, JIT plan access, and GC snapshots.
 - Interop baseline:
 - P/Invoke dispatch for `DllImport` methods (`PinvokeImpl` metadata).
 - Built-in native shim module `dotforge_native` (`abs`, `strlen`, `toupper_first`).
@@ -60,6 +61,7 @@ flowchart LR
 - `dotforge inspect <assembly>`: dump metadata types/methods/fields.
 - `dotforge disasm <assembly> <method-token-or-Type::Method>`: dump decoded IL.
 - `dotforge verify <assembly>`: run metadata + IL verification and reference resolution checks.
+- `dotforge runtime <assembly>`: execute and print runtime snapshot (`types/methods/jit/gc`).
 
 Examples:
 
@@ -67,6 +69,7 @@ Examples:
 dotforge run ./samples/Hello.dll
 dotforge inspect ./samples/Hello.dll
 dotforge disasm ./samples/Hello.dll Program::Main
+dotforge runtime ./samples/Hello.dll
 ```
 
 ## Build & Run

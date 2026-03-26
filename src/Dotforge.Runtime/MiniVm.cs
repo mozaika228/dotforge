@@ -21,6 +21,16 @@ public sealed class MiniVm
         set => _heap.Logger = value;
     }
 
+    public GcStats GetGcStats()
+    {
+        return _heap.GetStats();
+    }
+
+    public IReadOnlyDictionary<int, JitCompilationPlan> GetJitPlans()
+    {
+        return _jitPlans;
+    }
+
     public int ExecuteEntryPoint(ManagedAssembly assembly)
     {
         var entryPoint = assembly.GetEntryPoint();

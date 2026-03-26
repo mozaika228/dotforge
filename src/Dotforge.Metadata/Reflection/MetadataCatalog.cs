@@ -31,10 +31,13 @@ public sealed class MetadataCatalog
             foreach (var fieldHandle in typeDef.GetFields())
             {
                 var fieldDef = metadata.GetFieldDefinition(fieldHandle);
+                var fieldSig = ReadFieldSignature(metadata, fieldDef.Signature);
                 fields.Add(new DotFieldInfo(
                     Token: MetadataTokens.GetToken(fieldHandle),
                     Name: metadata.GetString(fieldDef.Name),
-                    DeclaringType: typeName));
+                    DeclaringType: typeName,
+                    IsStatic: (fieldDef.Attributes & System.Reflection.FieldAttributes.Static) != 0,
+                    FieldTypeCode: fieldSig.TypeCode));
             }
 
             foreach (var methodHandle in typeDef.GetMethods())
@@ -92,6 +95,20 @@ public sealed class MetadataCatalog
     }
 
     private readonly record struct MethodSig(int ParameterCount, bool IsInstance, string ReturnTypeCode);
+    private readonly record struct FieldSig(string TypeCode);
+
+    private static FieldSig ReadFieldSignature(MetadataReader metadata, BlobHandle signatureHandle)
+    {
+        var reader = metadata.GetBlobReader(signatureHandle);
+        var header = reader.ReadSignatureHeader();
+        if (header.Kind != SignatureKind.Field)
+        {
+            throw new NotSupportedException($"Unsupported field signature kind: {header.Kind}.");
+        }
+
+        var typeCode = reader.ReadSignatureTypeCode().ToString();
+        return new FieldSig(typeCode);
+    }
 
     private static Dictionary<int, IReadOnlyList<string>> BuildGenericParametersByOwner(MetadataReader metadata)
     {
