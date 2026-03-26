@@ -57,7 +57,7 @@ public sealed class VerificationTests
         using var appAssembly = context.Load(appPath);
         var unresolved = context.ResolveAllReferences(appAssembly);
 
-        Xunit.Assert.False(unresolved.Any(x => string.Equals(x, "MyLib", StringComparison.OrdinalIgnoreCase)));
+        Xunit.Assert.DoesNotContain(unresolved, x => string.Equals(x, "MyLib", StringComparison.OrdinalIgnoreCase));
         Xunit.Assert.NotNull(context.ResolveAssemblyReference("MyLib"));
     }
 
