@@ -52,7 +52,7 @@ public sealed class RuntimeTypeSystemTests
 
         var inst = ts.InstantiateType(
             box!.Handle,
-            [new RuntimeTypeHandle(0, "System.Int32")]);
+            [new Dotforge.Runtime.TypeSystem.RuntimeTypeHandle(0, "System.Int32")]);
 
         Xunit.Assert.Equal("Box<System.Int32>", inst.ToString());
     }
