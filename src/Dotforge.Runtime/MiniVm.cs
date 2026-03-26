@@ -778,6 +778,18 @@ public sealed class MiniVm
                 returnValue = string.Concat(args.Select(x => x?.ToString() ?? string.Empty));
                 return true;
             }
+
+            if (string.Equals(name, "op_Equality", StringComparison.Ordinal))
+            {
+                returnValue = string.Equals(args.ElementAtOrDefault(0)?.ToString(), args.ElementAtOrDefault(1)?.ToString(), StringComparison.Ordinal);
+                return true;
+            }
+
+            if (string.Equals(name, "op_Inequality", StringComparison.Ordinal))
+            {
+                returnValue = !string.Equals(args.ElementAtOrDefault(0)?.ToString(), args.ElementAtOrDefault(1)?.ToString(), StringComparison.Ordinal);
+                return true;
+            }
         }
 
         return false;
