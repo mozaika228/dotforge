@@ -55,6 +55,7 @@ public enum IlOpCode
     Cgt,
     Clt,
     Endfinally,
+    Endfault,
     Throw,
     Box,
     Unbox,

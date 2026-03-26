@@ -74,6 +74,7 @@ public sealed class MiniVm
                         ip++;
                         break;
                     case IlOpCode.Endfinally:
+                    case IlOpCode.Endfault:
                         ip++;
                         break;
 
@@ -918,6 +919,7 @@ public sealed class MiniVm
                     ip++;
                     break;
                 case IlOpCode.Endfinally:
+                case IlOpCode.Endfault:
                     return;
                 case IlOpCode.Pop:
                     if (frame.Stack.Count > 0)

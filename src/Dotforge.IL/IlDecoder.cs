@@ -79,6 +79,7 @@ public static class IlDecoder
                 0x3A => Branch(offset, IlOpCode.Brtrue, il.ReadInt32(), il.Offset),
                 0xDD => Branch(offset, IlOpCode.Leave, il.ReadInt32(), il.Offset),
                 0xDE => Branch(offset, IlOpCode.LeaveS, il.ReadSByte(), il.Offset),
+                0xDC => new IlInstruction(offset, IlOpCode.Endfault),
                 0x58 => new IlInstruction(offset, IlOpCode.Add),
                 0x59 => new IlInstruction(offset, IlOpCode.Sub),
                 0x5A => new IlInstruction(offset, IlOpCode.Mul),
