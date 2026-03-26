@@ -18,11 +18,22 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', '**/*.sln', '**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - name: Restore
-        run: dotnet restore dotforge.sln
+        run: dotnet restore dotforge.sln --use-lock-file
 
       - name: Build
         run: dotnet build dotforge.sln --configuration Release --no-restore
+
+      - name: Format (verify)
+        run: dotnet format dotforge.sln --verify-no-changes --no-restore
 
       - name: Test
         run: dotnet test dotforge.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
