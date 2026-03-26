@@ -824,20 +824,35 @@ public sealed class MiniVm
         _ = assembly;
         _ = caches;
 
-        var regions = frame.MethodBody.ExceptionRegions
-            .Where(r => IsWithinRange(faultOffset, r.TryOffset, r.TryLength))
-            .OrderBy(r => r.TryLength)
-            .ToArray();
+        var regions = frame.MethodBody.ExceptionRegions.ToArray();
+        var unwindHandlers = GetUnwindHandlersForException(regions, faultOffset).ToArray();
+        ExecuteUnwindHandlers(frame, unwindHandlers);
 
-        foreach (var region in regions)
+        var catchCandidates = regions
+            .Where(r => r.Kind == ExceptionRegionKind.Catch)
+            .Where(r => IsWithinRange(faultOffset, r.TryOffset, r.TryLength))
+            .OrderBy(r => r.TryLength);
+
+        var catchFound = false;
+        ExceptionRegion catchTarget = default;
+        foreach (var candidate in catchCandidates)
         {
-            if (region.Kind == ExceptionRegionKind.Catch && CatchMatches(frame.Assembly.Metadata, region, exception))
+            if (!CatchMatches(frame.Assembly.Metadata, candidate, exception))
             {
-                frame.Stack.Clear();
-                frame.Stack.Push(exception);
-                nextIp = Jump(frame.OffsetToIndex, region.HandlerOffset);
-                return true;
+                continue;
             }
+
+            catchFound = true;
+            catchTarget = candidate;
+            break;
+        }
+
+        if (catchFound)
+        {
+            frame.Stack.Clear();
+            frame.Stack.Push(exception);
+            nextIp = Jump(frame.OffsetToIndex, catchTarget.HandlerOffset);
+            return true;
         }
 
         nextIp = -1;
@@ -846,9 +861,209 @@ public sealed class MiniVm
 
     private int HandleLeave(ExecutionFrame frame, int currentOffset, int targetOffset)
     {
-        _ = currentOffset;
+        var regions = frame.MethodBody.ExceptionRegions.ToArray();
+        var unwindHandlers = GetUnwindHandlersForLeave(regions, currentOffset, targetOffset);
+        ExecuteUnwindHandlers(frame, unwindHandlers);
         frame.Stack.Clear();
         return Jump(frame.OffsetToIndex, targetOffset);
+    }
+
+    private static IEnumerable<ExceptionRegion> GetUnwindHandlersForException(
+        IReadOnlyList<ExceptionRegion> regions,
+        int faultOffset)
+    {
+        return regions
+            .Where(r => r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault)
+            .Where(r => IsWithinRange(faultOffset, r.TryOffset, r.TryLength))
+            .OrderBy(r => r.TryLength);
+    }
+
+    private static IEnumerable<ExceptionRegion> GetUnwindHandlersForLeave(
+        IReadOnlyList<ExceptionRegion> regions,
+        int currentOffset,
+        int targetOffset)
+    {
+        return regions
+            .Where(r => r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault)
+            .Where(r => IsWithinRange(currentOffset, r.TryOffset, r.TryLength))
+            .Where(r => !IsWithinRange(targetOffset, r.TryOffset, r.TryLength))
+            .OrderBy(r => r.TryLength);
+    }
+
+    private void ExecuteUnwindHandlers(ExecutionFrame frame, IEnumerable<ExceptionRegion> handlers)
+    {
+        foreach (var handler in handlers)
+        {
+            ExecuteHandlerRegion(frame, handler);
+        }
+    }
+
+    private void ExecuteHandlerRegion(ExecutionFrame frame, ExceptionRegion region)
+    {
+        var handlerStart = region.HandlerOffset;
+        var handlerEnd = region.HandlerOffset + region.HandlerLength;
+        var ip = Jump(frame.OffsetToIndex, handlerStart);
+
+        while (ip < frame.Instructions.Count)
+        {
+            var instruction = frame.Instructions[ip];
+            if (instruction.Offset >= handlerEnd)
+            {
+                return;
+            }
+
+            switch (instruction.OpCode)
+            {
+                case IlOpCode.Nop:
+                    ip++;
+                    break;
+                case IlOpCode.Endfinally:
+                    return;
+                case IlOpCode.Pop:
+                    if (frame.Stack.Count > 0)
+                    {
+                        _ = frame.Stack.Pop();
+                    }
+
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4M1:
+                    frame.Stack.Push(-1);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_0:
+                    frame.Stack.Push(0);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_1:
+                    frame.Stack.Push(1);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_2:
+                    frame.Stack.Push(2);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_3:
+                    frame.Stack.Push(3);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_4:
+                    frame.Stack.Push(4);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_5:
+                    frame.Stack.Push(5);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_6:
+                    frame.Stack.Push(6);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_7:
+                    frame.Stack.Push(7);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4_8:
+                    frame.Stack.Push(8);
+                    ip++;
+                    break;
+                case IlOpCode.LdcI4S:
+                case IlOpCode.LdcI4:
+                    frame.Stack.Push(Convert.ToInt32(instruction.Operand));
+                    ip++;
+                    break;
+                case IlOpCode.Ldloc0:
+                    frame.Stack.Push(ReadLocal(frame, 0));
+                    ip++;
+                    break;
+                case IlOpCode.Ldloc1:
+                    frame.Stack.Push(ReadLocal(frame, 1));
+                    ip++;
+                    break;
+                case IlOpCode.Ldloc2:
+                    frame.Stack.Push(ReadLocal(frame, 2));
+                    ip++;
+                    break;
+                case IlOpCode.Ldloc3:
+                    frame.Stack.Push(ReadLocal(frame, 3));
+                    ip++;
+                    break;
+                case IlOpCode.LdlocS:
+                case IlOpCode.Ldloc:
+                    frame.Stack.Push(ReadLocal(frame, Convert.ToInt32(instruction.Operand)));
+                    ip++;
+                    break;
+                case IlOpCode.Stloc0:
+                    WriteLocal(frame, 0, frame.Stack.Pop());
+                    ip++;
+                    break;
+                case IlOpCode.Stloc1:
+                    WriteLocal(frame, 1, frame.Stack.Pop());
+                    ip++;
+                    break;
+                case IlOpCode.Stloc2:
+                    WriteLocal(frame, 2, frame.Stack.Pop());
+                    ip++;
+                    break;
+                case IlOpCode.Stloc3:
+                    WriteLocal(frame, 3, frame.Stack.Pop());
+                    ip++;
+                    break;
+                case IlOpCode.StlocS:
+                case IlOpCode.Stloc:
+                    WriteLocal(frame, Convert.ToInt32(instruction.Operand), frame.Stack.Pop());
+                    ip++;
+                    break;
+                case IlOpCode.Add:
+                {
+                    var right = PopInt(frame.Stack);
+                    var left = PopInt(frame.Stack);
+                    frame.Stack.Push(left + right);
+                    ip++;
+                    break;
+                }
+                case IlOpCode.Sub:
+                {
+                    var right = PopInt(frame.Stack);
+                    var left = PopInt(frame.Stack);
+                    frame.Stack.Push(left - right);
+                    ip++;
+                    break;
+                }
+                case IlOpCode.Call:
+                    ExecuteCall(frame.Assembly, frame.Caches, frame.Stack, (int)instruction.Operand!);
+                    ip++;
+                    break;
+                case IlOpCode.Callvirt:
+                    ExecuteCallVirt(frame.Assembly, frame.Caches, frame.Stack, (int)instruction.Operand!);
+                    ip++;
+                    break;
+                case IlOpCode.Br:
+                case IlOpCode.BrS:
+                    ip = Jump(frame.OffsetToIndex, (int)instruction.Operand!);
+                    break;
+                case IlOpCode.Brtrue:
+                case IlOpCode.BrtrueS:
+                {
+                    var c = frame.Stack.Pop();
+                    ip = IsTrue(c) ? Jump(frame.OffsetToIndex, (int)instruction.Operand!) : ip + 1;
+                    break;
+                }
+                case IlOpCode.Brfalse:
+                case IlOpCode.BrfalseS:
+                {
+                    var c = frame.Stack.Pop();
+                    ip = !IsTrue(c) ? Jump(frame.OffsetToIndex, (int)instruction.Operand!) : ip + 1;
+                    break;
+                }
+                case IlOpCode.Leave:
+                case IlOpCode.LeaveS:
+                    // leave from handler transitions control outside protected block
+                    return;
+                default:
+                    throw new NotSupportedException($"Unsupported opcode in EH handler region: {instruction.OpCode}.");
+            }
+        }
     }
 
     private static bool CatchMatches(MetadataReader metadata, ExceptionRegion region, Exception exception)

@@ -194,6 +194,73 @@ public sealed class SmokeTests
         Xunit.Assert.Equal(42, result);
     }
 
+    [Xunit.Fact]
+    public void ExecutesFinallyOnNormalLeave()
+    {
+        var source = """
+            public static class Program
+            {
+                public static int Main()
+                {
+                    int x = 1;
+                    try
+                    {
+                        x = 2;
+                    }
+                    finally
+                    {
+                        x = x + 3;
+                    }
+
+                    return x;
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var assembly = ManagedAssembly.Load(assemblyPath);
+        var vm = new MiniVm();
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(5, result);
+    }
+
+    [Xunit.Fact]
+    public void ExecutesFinallyDuringExceptionUnwind()
+    {
+        var source = """
+            using System;
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    int x = 0;
+                    try
+                    {
+                        try
+                        {
+                            throw new Exception("boom");
+                        }
+                        finally
+                        {
+                            x = 9;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        return x;
+                    }
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var assembly = ManagedAssembly.Load(assemblyPath);
+        var vm = new MiniVm();
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(9, result);
+    }
+
     private static void AssertMethodContainsOpcodes(ManagedAssembly assembly, string methodSpec, params IlOpCode[] expected)
     {
         var handle = ResolveMethodHandle(assembly, methodSpec);

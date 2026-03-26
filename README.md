@@ -84,4 +84,5 @@ dotnet test dotforge.sln -c Release
 - JIT backend: SSA/IR lowering -> native codegen (LLVM/C++ backend).
 - Full reflection: richer signatures, generics, attributes, runtime handles.
 - Exception handling: complete `try/catch/finally`, filter semantics, unwind fidelity.
+- EH/unwinding core path now executes `finally/fault` during `leave` and exception propagation.
 - AOT pipeline for ahead-of-time compilation and startup optimization.
