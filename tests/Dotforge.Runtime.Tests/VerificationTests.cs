@@ -44,14 +44,14 @@ public sealed class VerificationTests
             {
                 public static int Value() => 7;
             }
-            """, "MyLib", libPath);
+            """, "MyLib", libPath, outputKind: OutputKind.DynamicallyLinkedLibrary);
 
         CompileToPath("""
             public static class Program
             {
                 public static int Main() => Helper.Value();
             }
-            """, "MyApp", appPath, [MetadataReference.CreateFromFile(libPath)]);
+            """, "MyApp", appPath, [MetadataReference.CreateFromFile(libPath)], OutputKind.ConsoleApplication);
 
         using var context = new AssemblyLoadContextLite(tempRoot);
         using var appAssembly = context.Load(appPath);
@@ -70,7 +70,12 @@ public sealed class VerificationTests
         return assemblyPath;
     }
 
-    private static void CompileToPath(string source, string assemblyName, string outputPath, IReadOnlyList<MetadataReference>? extraRefs = null)
+    private static void CompileToPath(
+        string source,
+        string assemblyName,
+        string outputPath,
+        IReadOnlyList<MetadataReference>? extraRefs = null,
+        OutputKind outputKind = OutputKind.ConsoleApplication)
     {
         var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp12));
         var refs = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
@@ -89,7 +94,7 @@ public sealed class VerificationTests
             syntaxTrees: [tree],
             references: refs,
             options: new CSharpCompilationOptions(
-                outputKind: OutputKind.ConsoleApplication,
+                outputKind: outputKind,
                 optimizationLevel: OptimizationLevel.Debug,
                 nullableContextOptions: NullableContextOptions.Enable));
 
