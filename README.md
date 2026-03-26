@@ -82,6 +82,16 @@ dotnet build dotforge.sln -c Release
 dotnet test dotforge.sln -c Release
 ```
 
+## Toolchain & DX
+
+- SDK pinning via `global.json` (`.NET 8` feature band with roll-forward).
+- Shared compiler/build defaults in `Directory.Build.props`.
+- Repository code style via `.editorconfig`.
+- Local tool manifest for `dotnet format` in `.config/dotnet-tools.json`.
+- Dev scripts:
+  - PowerShell: `./scripts/dev.ps1 <bootstrap|restore|build|test|format|ci>`
+  - Bash: `./scripts/dev.sh <bootstrap|restore|build|test|format|ci>`
+
 ## Repository Structure
 
 - `src/Dotforge.Metadata`: PE/metadata reader + reflection catalog.
