@@ -698,6 +698,18 @@ public sealed class MiniVm
             }
 
             ctorSig = ReadMethodSignature(metadata, member.Signature);
+
+            if (member.Parent.Kind == HandleKind.TypeReference)
+            {
+                var ctorArgs = PopArguments(stack, ctorSig.ParameterCount);
+                if (TryCreateHostObject(metadata, (TypeReferenceHandle)member.Parent, ctorArgs, out var hostObject))
+                {
+                    return hostObject;
+                }
+
+                throw new NotSupportedException("Only constructors on types defined in current assembly or host runtime intrinsics are supported.");
+            }
+
             typeHandle = ResolveTypeFromCtorMemberRef(metadata, member);
             if (!TryResolveMethodDefinition(metadata, caches, typeHandle, memberName, ctorSig.ParameterCount, out ctorHandle))
             {
@@ -902,6 +914,83 @@ public sealed class MiniVm
             }
 
             returnValue = candidate.Invoke(instance, converted);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryCreateHostObject(MetadataReader metadata, TypeReferenceHandle typeReferenceHandle, object?[] ctorArgs, out object instance)
+    {
+        instance = null!;
+        var typeRef = metadata.GetTypeReference(typeReferenceHandle);
+        var ns = metadata.GetString(typeRef.Namespace);
+        var name = metadata.GetString(typeRef.Name);
+        var fullTypeName = string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+
+        var type = Type.GetType(fullTypeName, throwOnError: false);
+        if (type is null)
+        {
+            type = AppDomain.CurrentDomain
+                .GetAssemblies()
+                .Select(a => a.GetType(fullTypeName, throwOnError: false))
+                .FirstOrDefault(static x => x is not null);
+        }
+
+        if (type is null)
+        {
+            return false;
+        }
+
+        foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var parameters = ctor.GetParameters();
+            if (parameters.Length != ctorArgs.Length)
+            {
+                continue;
+            }
+
+            var converted = new object?[ctorArgs.Length];
+            var compatible = true;
+            for (var i = 0; i < ctorArgs.Length; i++)
+            {
+                var arg = ctorArgs[i];
+                var parameterType = parameters[i].ParameterType;
+                if (arg is null)
+                {
+                    if (parameterType.IsValueType && Nullable.GetUnderlyingType(parameterType) is null)
+                    {
+                        compatible = false;
+                        break;
+                    }
+
+                    converted[i] = null;
+                    continue;
+                }
+
+                if (parameterType.IsInstanceOfType(arg))
+                {
+                    converted[i] = arg;
+                    continue;
+                }
+
+                try
+                {
+                    converted[i] = Convert.ChangeType(arg, parameterType);
+                }
+                catch
+                {
+                    compatible = false;
+                    break;
+                }
+            }
+
+            if (!compatible)
+            {
+                continue;
+            }
+
+            instance = ctor.Invoke(converted);
             return true;
         }
 
