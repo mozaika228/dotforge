@@ -41,6 +41,10 @@ flowchart LR
   - collection logging (`DOTFORGE_GC_LOG=1`)
 - Metadata reflection catalog for type/method/field inspection.
 - JIT planning scaffold (`IL -> IR`) to support native backend work.
+- RyuJIT-lite foundation:
+- three-address IR (`IlToIrLowerer`)
+- optimization passes (`const-fold`, `dce`)
+- pseudo x64 lowering for diagnostics
 
 ## CLI
 

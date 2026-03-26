@@ -1,20 +1,19 @@
 using Dotforge.IL;
+using Dotforge.Runtime.Jit.Backend;
+using Dotforge.Runtime.Jit.Passes;
 
 namespace Dotforge.Runtime.Jit;
 
 public static class MethodJitPlan
 {
-    public static IReadOnlyList<IrInstruction> LowerToIr(IlMethodBody body)
+    public static JitCompilationPlan Create(int methodToken, IlMethodBody body)
     {
-        var ir = new List<IrInstruction>(body.Instructions.Count);
-        foreach (var instruction in body.Instructions)
-        {
-            ir.Add(new IrInstruction(
-                Op: instruction.OpCode.ToString(),
-                Dest: $"il_{instruction.Offset:X4}",
-                Left: instruction.Operand?.ToString()));
-        }
-
-        return ir;
+        var initial = IlToIrLowerer.Lower(methodToken, body);
+        var manager = new IrPassManager(
+            new ConstantFoldingPass(),
+            new DeadCodeEliminationPass());
+        var optimized = manager.Run(initial);
+        var asm = PseudoX64Lowering.Lower(optimized);
+        return new JitCompilationPlan(initial, optimized, asm);
     }
 }

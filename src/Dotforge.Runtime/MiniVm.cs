@@ -1,6 +1,7 @@
 using Dotforge.IL;
 using Dotforge.Metadata;
 using Dotforge.Runtime.Gc;
+using Dotforge.Runtime.Jit;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -12,6 +13,7 @@ public sealed class MiniVm
 {
     private readonly GenerationalHeap _heap = new();
     private readonly Dictionary<CallSiteCacheKey, MethodDefinitionHandle> _virtualCallCache = [];
+    private readonly Dictionary<int, JitCompilationPlan> _jitPlans = [];
     public Action<string>? GcLogger
     {
         set => _heap.Logger = value;
@@ -47,6 +49,12 @@ public sealed class MiniVm
 
         var methodBody = assembly.GetMethodBody(methodHandle);
         var decoded = IlDecoder.Decode(methodBody);
+        var methodToken = MetadataTokens.GetToken(methodHandle);
+        if (!_jitPlans.ContainsKey(methodToken))
+        {
+            _jitPlans[methodToken] = MethodJitPlan.Create(methodToken, decoded);
+        }
+
         var localCount = ReadLocalCount(metadata, methodBody.LocalSignature);
         var frame = new ExecutionFrame(instructions: decoded.Instructions, methodBody: methodBody, args: args, localCount: localCount)
         {

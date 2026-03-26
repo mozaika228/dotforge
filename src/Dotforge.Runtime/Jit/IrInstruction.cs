@@ -1,3 +1,11 @@
 namespace Dotforge.Runtime.Jit;
 
-public sealed record IrInstruction(string Op, string? Dest = null, string? Left = null, string? Right = null);
+public sealed record IrInstruction(
+    IrOpCode OpCode,
+    int? Dest = null,
+    int? Left = null,
+    int? Right = null,
+    int? Immediate = null,
+    int? LocalIndex = null,
+    int? ArgIndex = null,
+    string? Label = null);
