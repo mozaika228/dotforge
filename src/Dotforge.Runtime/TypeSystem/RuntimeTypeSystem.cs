@@ -45,6 +45,7 @@ public sealed class RuntimeTypeSystem
 
             byToken[type.Token] = descriptor;
             byName[type.FullName] = descriptor;
+            byName[NormalizeMetadataTypeName(type.FullName)] = descriptor;
         }
 
         return new RuntimeTypeSystem(byToken, byName);
@@ -73,5 +74,11 @@ public sealed class RuntimeTypeSystem
         }
 
         return new GenericInstantiation(genericType, typeArguments);
+    }
+
+    public static string NormalizeMetadataTypeName(string fullName)
+    {
+        var tickIndex = fullName.IndexOf('`');
+        return tickIndex >= 0 ? fullName[..tickIndex] : fullName;
     }
 }

@@ -11,6 +11,7 @@ public sealed record GenericInstantiation(
             return GenericType.FullName;
         }
 
-        return $"{GenericType.FullName}<{string.Join(", ", TypeArguments.Select(x => x.FullName))}>";
+        var printable = RuntimeTypeSystem.NormalizeMetadataTypeName(GenericType.FullName);
+        return $"{printable}<{string.Join(", ", TypeArguments.Select(x => x.FullName))}>";
     }
 }
