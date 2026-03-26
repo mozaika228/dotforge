@@ -1,0 +1,17 @@
+# Normalize text files to LF in repository.
+* text=auto
+
+# C# and project files
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+
+# CI / scripts / docs
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.md text eol=lf
+*.editorconfig text eol=lf

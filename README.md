@@ -91,6 +91,7 @@ dotnet test dotforge.sln -c Release
 - Shared compiler/build defaults in `Directory.Build.props`.
 - NuGet lock-file generation enabled via `RestorePackagesWithLockFile`.
 - Repository code style via `.editorconfig`.
+- Repository line-ending policy via `.gitattributes` (LF for source/config/docs).
 - Dev scripts:
   - PowerShell: `./scripts/dev.ps1 <bootstrap|restore|build|test|format|ci>`
   - Bash: `./scripts/dev.sh <bootstrap|restore|build|test|format|ci>`
