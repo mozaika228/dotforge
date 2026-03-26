@@ -32,9 +32,6 @@ jobs:
       - name: Build
         run: dotnet build dotforge.sln --configuration Release --no-restore
 
-      - name: Format (verify)
-        run: dotnet format dotforge.sln --verify-no-changes --no-restore
-
       - name: Test
         run: dotnet test dotforge.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 

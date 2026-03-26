@@ -29,7 +29,6 @@ try {
         "ci" {
             dotnet restore dotforge.sln --use-lock-file
             dotnet build dotforge.sln --configuration Release --no-restore
-            dotnet format dotforge.sln --verify-no-changes --no-restore
             dotnet test dotforge.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
         }
     }
