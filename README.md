@@ -41,6 +41,7 @@ flowchart LR
 - strong/weak handle table and finalization queue callbacks
 - collection statistics and logging (`DOTFORGE_GC_LOG=1`)
 - Metadata reflection catalog for type/method/field inspection.
+- Runtime type system layer with generic arity and generic instantiation model.
 - JIT planning scaffold (`IL -> IR`) to support native backend work.
 - RyuJIT-lite foundation:
 - three-address IR (`IlToIrLowerer`)

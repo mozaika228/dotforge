@@ -50,7 +50,8 @@ static int Inspect(string[] args)
     var catalog = new MetadataCatalog(assembly);
     foreach (var type in catalog.GetTypes())
     {
-        Console.WriteLine($"type 0x{type.Token:X8} {type.FullName}");
+        var typeGeneric = type.GenericArity > 0 ? $"<{string.Join(", ", type.GenericParameters)}>" : string.Empty;
+        Console.WriteLine($"type 0x{type.Token:X8} {type.FullName}{typeGeneric}");
         foreach (var field in type.Fields)
         {
             Console.WriteLine($"  field 0x{field.Token:X8} {field.Name}");
@@ -59,7 +60,8 @@ static int Inspect(string[] args)
         foreach (var method in type.Methods)
         {
             var mode = method.IsStatic ? "static" : "instance";
-            Console.WriteLine($"  method 0x{method.Token:X8} {mode} {method.Name} ({method.ParameterCount}) -> {method.ReturnTypeCode}");
+            var methodGeneric = method.GenericArity > 0 ? $"<{string.Join(", ", method.GenericParameters)}>" : string.Empty;
+            Console.WriteLine($"  method 0x{method.Token:X8} {mode} {method.Name}{methodGeneric} ({method.ParameterCount}) -> {method.ReturnTypeCode}");
         }
     }
 

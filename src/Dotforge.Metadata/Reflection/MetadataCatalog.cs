@@ -16,10 +16,15 @@ public sealed class MetadataCatalog
     {
         var metadata = _assembly.Metadata;
         var result = new List<DotTypeInfo>();
+        var genericParamsByOwner = BuildGenericParametersByOwner(metadata);
         foreach (var typeHandle in metadata.TypeDefinitions)
         {
             var typeDef = metadata.GetTypeDefinition(typeHandle);
             var typeName = ReadTypeName(metadata, typeHandle);
+            var typeToken = MetadataTokens.GetToken(typeHandle);
+            var typeGenericParams = genericParamsByOwner.TryGetValue(typeToken, out var tgp)
+                ? tgp
+                : [];
             var fields = new List<DotFieldInfo>();
             var methods = new List<DotMethodInfo>();
 
@@ -41,13 +46,17 @@ public sealed class MetadataCatalog
                     Name: metadata.GetString(methodDef.Name),
                     DeclaringType: typeName,
                     ParameterCount: sig.ParameterCount,
+                    GenericArity: genericParamsByOwner.TryGetValue(MetadataTokens.GetToken(methodHandle), out var mgp) ? mgp.Count : 0,
+                    GenericParameters: genericParamsByOwner.TryGetValue(MetadataTokens.GetToken(methodHandle), out var mgp2) ? mgp2 : [],
                     IsStatic: !sig.IsInstance,
                     ReturnTypeCode: sig.ReturnTypeCode));
             }
 
             result.Add(new DotTypeInfo(
-                Token: MetadataTokens.GetToken(typeHandle),
+                Token: typeToken,
                 FullName: typeName,
+                GenericArity: typeGenericParams.Count,
+                GenericParameters: typeGenericParams,
                 Fields: fields,
                 Methods: methods));
         }
@@ -83,4 +92,23 @@ public sealed class MetadataCatalog
     }
 
     private readonly record struct MethodSig(int ParameterCount, bool IsInstance, string ReturnTypeCode);
+
+    private static Dictionary<int, IReadOnlyList<string>> BuildGenericParametersByOwner(MetadataReader metadata)
+    {
+        var map = new Dictionary<int, List<string>>();
+        foreach (var gpHandle in metadata.GenericParameters)
+        {
+            var gp = metadata.GetGenericParameter(gpHandle);
+            var ownerToken = MetadataTokens.GetToken(gp.Parent);
+            if (!map.TryGetValue(ownerToken, out var list))
+            {
+                list = [];
+                map[ownerToken] = list;
+            }
+
+            list.Add(metadata.GetString(gp.Name));
+        }
+
+        return map.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value);
+    }
 }

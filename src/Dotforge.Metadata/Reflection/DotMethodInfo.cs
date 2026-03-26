@@ -5,5 +5,7 @@ public sealed record DotMethodInfo(
     string Name,
     string DeclaringType,
     int ParameterCount,
+    int GenericArity,
+    IReadOnlyList<string> GenericParameters,
     bool IsStatic,
     string ReturnTypeCode);
