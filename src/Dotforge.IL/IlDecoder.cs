@@ -22,7 +22,9 @@ public static class IlDecoder
                 {
                     0x01 => new IlInstruction(offset, IlOpCode.Ceq),
                     0x02 => new IlInstruction(offset, IlOpCode.Cgt),
+                    0x03 => new IlInstruction(offset, IlOpCode.CgtUn),
                     0x04 => new IlInstruction(offset, IlOpCode.Clt),
+                    0x05 => new IlInstruction(offset, IlOpCode.CltUn),
                     0x06 => new IlInstruction(offset, IlOpCode.Ldftn, il.ReadInt32()),
                     0x09 => new IlInstruction(offset, IlOpCode.Ldarg, il.ReadUInt16()),
                     0x0C => new IlInstruction(offset, IlOpCode.Ldloc, il.ReadUInt16()),

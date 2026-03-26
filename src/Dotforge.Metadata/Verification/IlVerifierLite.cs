@@ -63,7 +63,9 @@ public static class IlVerifierLite
                 {
                     case 0x01: // ceq
                     case 0x02: // cgt
+                    case 0x03: // cgt.un
                     case 0x04: // clt
+                    case 0x05: // clt.un
                         stack -= 1;
                         break;
                     case 0x09: // ldarg

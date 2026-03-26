@@ -283,11 +283,27 @@ public sealed class MiniVm
                         ip++;
                         break;
                     }
+                    case IlOpCode.CgtUn:
+                    {
+                        var right = frame.Stack.Pop();
+                        var left = frame.Stack.Pop();
+                        frame.Stack.Push(CompareUnsigned(left, right, greater: true) ? 1 : 0);
+                        ip++;
+                        break;
+                    }
                     case IlOpCode.Clt:
                     {
                         var right = PopInt(frame.Stack);
                         var left = PopInt(frame.Stack);
                         frame.Stack.Push(left < right ? 1 : 0);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.CltUn:
+                    {
+                        var right = frame.Stack.Pop();
+                        var left = frame.Stack.Pop();
+                        frame.Stack.Push(CompareUnsigned(left, right, greater: false) ? 1 : 0);
                         ip++;
                         break;
                     }
@@ -1111,11 +1127,27 @@ public sealed class MiniVm
                         ip++;
                         break;
                     }
+                    case IlOpCode.CgtUn:
+                    {
+                        var right = frame.Stack.Pop();
+                        var left = frame.Stack.Pop();
+                        frame.Stack.Push(CompareUnsigned(left, right, greater: true) ? 1 : 0);
+                        ip++;
+                        break;
+                    }
                     case IlOpCode.Clt:
                     {
                         var right = PopInt(frame.Stack);
                         var left = PopInt(frame.Stack);
                         frame.Stack.Push(left < right ? 1 : 0);
+                        ip++;
+                        break;
+                    }
+                    case IlOpCode.CltUn:
+                    {
+                        var right = frame.Stack.Pop();
+                        var left = frame.Stack.Pop();
+                        frame.Stack.Push(CompareUnsigned(left, right, greater: false) ? 1 : 0);
                         ip++;
                         break;
                     }
@@ -1706,6 +1738,40 @@ public sealed class MiniVm
             DotArray => true,
             _ => true
         };
+    }
+
+    private static bool CompareUnsigned(object? left, object? right, bool greater)
+    {
+        if (left is null || right is null)
+        {
+            if (greater)
+            {
+                return left is not null && right is null;
+            }
+
+            return left is null && right is not null;
+        }
+
+        if (TryConvertUInt64(left, out var l) && TryConvertUInt64(right, out var r))
+        {
+            return greater ? l > r : l < r;
+        }
+
+        return false;
+    }
+
+    private static bool TryConvertUInt64(object value, out ulong converted)
+    {
+        try
+        {
+            converted = Convert.ToUInt64(value);
+            return true;
+        }
+        catch
+        {
+            converted = 0;
+            return false;
+        }
     }
 
     private static bool IsInstanceOfTypeName(object? value, string typeName)
