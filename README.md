@@ -96,6 +96,7 @@ dotnet test dotforge.sln -c Release
   - PowerShell: `./scripts/dev.ps1 <bootstrap|restore|build|test|format|ci>`
   - Bash: `./scripts/dev.sh <bootstrap|restore|build|test|format|ci>`
 - Production release gate: [`Definition of Done`](docs/DEFINITION_OF_DONE.md)
+- CI currently runs `dotnet format` in advisory mode (non-blocking) until full repository normalization is landed.
 
 ## Repository Structure
 
