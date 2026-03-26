@@ -68,6 +68,37 @@ public sealed class RuntimeServicesTests
         Xunit.Assert.True(snapshot.TypeCount > 0);
         Xunit.Assert.True(snapshot.MethodCount > 0);
         Xunit.Assert.True(snapshot.JitPlanCount > 0);
+        Xunit.Assert.Equal(1, snapshot.ExecutionCount);
+        Xunit.Assert.Equal(1, snapshot.SuccessfulRuns);
+        Xunit.Assert.Equal(0, snapshot.FailedRuns);
+    }
+
+    [Xunit.Fact]
+    public async Task ParallelRunsReturnExpectedResults()
+    {
+        var source = """
+            public static class Program
+            {
+                public static int Main()
+                {
+                    int x = 40;
+                    return x + 2;
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var host = RuntimeHost.Load(assemblyPath);
+
+        var results = await host.RunEntryPointParallelAsync(8);
+        var snapshot = host.CaptureSnapshot();
+
+        Xunit.Assert.Equal(8, results.Count);
+        Xunit.Assert.All(results, static x => Xunit.Assert.Equal(42, x));
+        Xunit.Assert.Equal(8, snapshot.ExecutionCount);
+        Xunit.Assert.Equal(8, snapshot.SuccessfulRuns);
+        Xunit.Assert.Equal(0, snapshot.FailedRuns);
+        Xunit.Assert.Equal(42, snapshot.LastExitCode);
     }
 
     private static string Compile(string source)

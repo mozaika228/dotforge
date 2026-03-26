@@ -8,7 +8,13 @@ namespace Dotforge.Runtime.Services;
 
 public sealed class RuntimeHost : IDisposable
 {
+    private readonly object _gate = new();
     private readonly bool _ownsAssembly;
+    private GcStats _lastObservedGcStats = new(0, 0, 0, 0, 0, 0, 0);
+    private int _executionCount;
+    private int _successfulRuns;
+    private int _failedRuns;
+    private int _maxObservedJitPlans;
     private int? _lastExitCode;
 
     public RuntimeHost(ManagedAssembly assembly, MiniVm? vm = null, bool ownsAssembly = false)
@@ -34,8 +40,31 @@ public sealed class RuntimeHost : IDisposable
 
     public int RunEntryPoint()
     {
-        _lastExitCode = Vm.ExecuteEntryPoint(Assembly);
-        return _lastExitCode.Value;
+        lock (_gate)
+        {
+            return ExecuteWithVmCore(Vm);
+        }
+    }
+
+    public int RunEntryPointIsolated()
+    {
+        var vm = new MiniVm();
+        return ExecuteWithVmCore(vm);
+    }
+
+    public async Task<IReadOnlyList<int>> RunEntryPointParallelAsync(int runCount, CancellationToken cancellationToken = default)
+    {
+        if (runCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(runCount), runCount, "runCount must be positive.");
+        }
+
+        var tasks = Enumerable.Range(0, runCount)
+            .Select(_ => Task.Run(RunEntryPointIsolated, cancellationToken))
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+        return tasks.Select(static t => t.Result).ToArray();
     }
 
     public GcStats GetGcStats() => Vm.GetGcStats();
@@ -46,12 +75,18 @@ public sealed class RuntimeHost : IDisposable
     {
         var types = Reflection.GetTypes();
         var methodCount = types.Sum(static t => t.Methods.Count);
-        return new RuntimeSnapshot(
-            TypeCount: types.Count,
-            MethodCount: methodCount,
-            JitPlanCount: Vm.GetJitPlans().Count,
-            GcStats: Vm.GetGcStats(),
-            LastExitCode: _lastExitCode);
+        lock (_gate)
+        {
+            return new RuntimeSnapshot(
+                TypeCount: types.Count,
+                MethodCount: methodCount,
+                JitPlanCount: Math.Max(Vm.GetJitPlans().Count, _maxObservedJitPlans),
+                GcStats: _lastObservedGcStats,
+                LastExitCode: _lastExitCode,
+                ExecutionCount: _executionCount,
+                SuccessfulRuns: _successfulRuns,
+                FailedRuns: _failedRuns);
+        }
     }
 
     public void Dispose()
@@ -59,6 +94,40 @@ public sealed class RuntimeHost : IDisposable
         if (_ownsAssembly)
         {
             Assembly.Dispose();
+        }
+    }
+
+    private int ExecuteWithVmCore(MiniVm vm)
+    {
+        lock (_gate)
+        {
+            _executionCount++;
+        }
+
+        try
+        {
+            var exitCode = vm.ExecuteEntryPoint(Assembly);
+            var gc = vm.GetGcStats();
+            var jitPlans = vm.GetJitPlans().Count;
+
+            lock (_gate)
+            {
+                _successfulRuns++;
+                _lastExitCode = exitCode;
+                _lastObservedGcStats = gc;
+                _maxObservedJitPlans = Math.Max(_maxObservedJitPlans, jitPlans);
+            }
+
+            return exitCode;
+        }
+        catch
+        {
+            lock (_gate)
+            {
+                _failedRuns++;
+            }
+
+            throw;
         }
     }
 }

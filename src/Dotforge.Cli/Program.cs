@@ -45,18 +45,35 @@ static int Run(string[] args)
 
 static int RuntimeInfo(string[] args)
 {
-    if (args.Length != 2)
+    if (args.Length is not (2 or 3))
     {
-        Console.Error.WriteLine("Usage: dotforge runtime <path-to-managed-assembly>");
+        Console.Error.WriteLine("Usage: dotforge runtime <path-to-managed-assembly> [parallel-runs]");
         return 1;
     }
 
     using var host = RuntimeHost.Load(args[1]);
-    var exitCode = host.RunEntryPoint();
+    int exitCode;
+    if (args.Length == 3)
+    {
+        if (!int.TryParse(args[2], out var runs) || runs <= 0)
+        {
+            Console.Error.WriteLine("parallel-runs must be a positive integer.");
+            return 1;
+        }
+
+        var results = host.RunEntryPointParallelAsync(runs).GetAwaiter().GetResult();
+        exitCode = results.Last();
+    }
+    else
+    {
+        exitCode = host.RunEntryPoint();
+    }
+
     var snapshot = host.CaptureSnapshot();
     Console.WriteLine($"runtime: exit={exitCode}");
     Console.WriteLine($"  types={snapshot.TypeCount} methods={snapshot.MethodCount}");
     Console.WriteLine($"  jit-plans={snapshot.JitPlanCount}");
+    Console.WriteLine($"  runs: total={snapshot.ExecutionCount} success={snapshot.SuccessfulRuns} failed={snapshot.FailedRuns}");
     Console.WriteLine($"  gc: minor={snapshot.GcStats.MinorCollections} major={snapshot.GcStats.MajorCollections} gen0={snapshot.GcStats.Gen0Count} gen1={snapshot.GcStats.Gen1Count} loh={snapshot.GcStats.LohCount}");
     return exitCode;
 }
@@ -244,5 +261,5 @@ static void PrintUsage()
     Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
     Console.Error.WriteLine("  dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
     Console.Error.WriteLine("  dotforge verify <path-to-managed-assembly>");
-    Console.Error.WriteLine("  dotforge runtime <path-to-managed-assembly>");
+    Console.Error.WriteLine("  dotforge runtime <path-to-managed-assembly> [parallel-runs]");
 }

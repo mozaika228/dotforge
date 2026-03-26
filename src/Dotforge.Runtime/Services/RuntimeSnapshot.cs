@@ -7,4 +7,7 @@ public sealed record RuntimeSnapshot(
     int MethodCount,
     int JitPlanCount,
     GcStats GcStats,
-    int? LastExitCode);
+    int? LastExitCode,
+    int ExecutionCount,
+    int SuccessfulRuns,
+    int FailedRuns);
