@@ -1,6 +1,7 @@
 using Dotforge.IL;
 using Dotforge.Metadata;
 using Dotforge.Runtime.Gc;
+using Dotforge.Runtime.Interop;
 using Dotforge.Runtime.Jit;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -12,6 +13,7 @@ namespace Dotforge.Runtime;
 public sealed class MiniVm
 {
     private readonly GenerationalHeap _heap = new();
+    private readonly PInvokeRegistry _pinvokeRegistry = new();
     private readonly Dictionary<CallSiteCacheKey, MethodDefinitionHandle> _virtualCallCache = [];
     private readonly Dictionary<int, JitCompilationPlan> _jitPlans = [];
     public Action<string>? GcLogger
@@ -45,6 +47,16 @@ public sealed class MiniVm
         if (expectedArgCount != args.Length)
         {
             throw new InvalidOperationException($"Method expects {expectedArgCount} args, received {args.Length}.");
+        }
+
+        if (method.RelativeVirtualAddress == 0)
+        {
+            if (IsPInvokeMethod(method))
+            {
+                return ExecutePInvokeMethod(metadata, method, args);
+            }
+
+            throw new InvalidOperationException("Method has no body RVA.");
         }
 
         var methodBody = assembly.GetMethodBody(methodHandle);
@@ -457,7 +469,16 @@ public sealed class MiniVm
             var signature = ReadMethodSignature(metadata, methodDef.Signature);
             var totalArgs = signature.ParameterCount + (signature.IsInstance ? 1 : 0);
             var args = PopArguments(stack, totalArgs);
-            var result = ExecuteMethod(assembly, caches, methodHandle, args);
+            object? result;
+            if (IsPInvokeMethod(methodDef))
+            {
+                result = ExecutePInvokeMethod(metadata, methodDef, args);
+            }
+            else
+            {
+                result = ExecuteMethod(assembly, caches, methodHandle, args);
+            }
+
             if (!signature.ReturnsVoid)
             {
                 stack.Push(result);
@@ -725,6 +746,26 @@ public sealed class MiniVm
         }
 
         return false;
+    }
+
+    private static bool IsPInvokeMethod(MethodDefinition methodDef)
+    {
+        return (methodDef.Attributes & MethodAttributes.PinvokeImpl) != 0;
+    }
+
+    private object? ExecutePInvokeMethod(MetadataReader metadata, MethodDefinition methodDef, object?[] args)
+    {
+        var import = methodDef.GetImport();
+        var moduleRef = metadata.GetModuleReference(import.Module);
+        var moduleName = metadata.GetString(moduleRef.Name);
+        var entryName = metadata.GetString(import.Name);
+
+        if (!_pinvokeRegistry.TryInvoke(moduleName, entryName, args, out var result))
+        {
+            throw new NotSupportedException($"P/Invoke target '{moduleName}!{entryName}' is not registered.");
+        }
+
+        return result;
     }
 
     private static bool TryResolveCalliTarget(object? pointer, out MethodDefinitionHandle targetMethod)

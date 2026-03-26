@@ -261,6 +261,37 @@ public sealed class SmokeTests
         Xunit.Assert.Equal(9, result);
     }
 
+    [Xunit.Fact]
+    public void ExecutesPInvokeInteropCalls()
+    {
+        var source = """
+            using System.Runtime.InteropServices;
+
+            public static class Native
+            {
+                [DllImport("dotforge_native", EntryPoint = "abs")]
+                public static extern int Abs(int value);
+
+                [DllImport("dotforge_native", EntryPoint = "strlen")]
+                public static extern int StrLen(string value);
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    return Native.Abs(-40) + Native.StrLen("ab");
+                }
+            }
+            """;
+
+        var assemblyPath = Compile(source);
+        using var assembly = ManagedAssembly.Load(assemblyPath);
+        var vm = new MiniVm();
+        var result = vm.ExecuteEntryPoint(assembly);
+        Xunit.Assert.Equal(42, result);
+    }
+
     private static void AssertMethodContainsOpcodes(ManagedAssembly assembly, string methodSpec, params IlOpCode[] expected)
     {
         var handle = ResolveMethodHandle(assembly, methodSpec);

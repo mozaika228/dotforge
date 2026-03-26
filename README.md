@@ -42,6 +42,9 @@ flowchart LR
 - collection statistics and logging (`DOTFORGE_GC_LOG=1`)
 - Metadata reflection catalog for type/method/field inspection.
 - Runtime type system layer with generic arity and generic instantiation model.
+- Interop baseline:
+- P/Invoke dispatch for `DllImport` methods (`PinvokeImpl` metadata).
+- Built-in native shim module `dotforge_native` (`abs`, `strlen`, `toupper_first`).
 - Loader and verification:
 - Assembly load context with probing-based reference resolution.
 - Metadata validation and IL verification (`dotforge verify`).
