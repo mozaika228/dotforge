@@ -1,6 +1,8 @@
 using Dotforge.IL;
+using Dotforge.Metadata.Loader;
 using Dotforge.Metadata;
 using Dotforge.Metadata.Reflection;
+using Dotforge.Metadata.Verification;
 using Dotforge.Runtime;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -17,6 +19,7 @@ return command switch
     "run" => Run(args),
     "inspect" => Inspect(args),
     "disasm" => Disasm(args),
+    "verify" => Verify(args),
     _ => UnknownCommand(command)
 };
 
@@ -94,6 +97,37 @@ static int Disasm(string[] args)
     }
 
     return 0;
+}
+
+static int Verify(string[] args)
+{
+    if (args.Length != 2)
+    {
+        Console.Error.WriteLine("Usage: dotforge verify <path-to-managed-assembly>");
+        return 1;
+    }
+
+    using var context = new AssemblyLoadContextLite(Path.GetDirectoryName(Path.GetFullPath(args[1])) ?? ".");
+    using var assembly = context.Load(args[1]);
+    var unresolved = context.ResolveAllReferences(assembly);
+    var mdReport = MetadataValidator.Validate(assembly);
+    var ilReport = IlVerifierLite.Verify(assembly);
+
+    Console.WriteLine($"verify: {Path.GetFileName(assembly.Path)}");
+    foreach (var miss in unresolved)
+    {
+        Console.WriteLine($"  [warn] unresolved-reference: {miss}");
+    }
+
+    foreach (var m in mdReport.Messages.Concat(ilReport.Messages))
+    {
+        var level = m.IsError ? "error" : "warn";
+        Console.WriteLine($"  [{level}] {m.Code}: {m.Message}");
+    }
+
+    var hasErrors = mdReport.HasErrors || ilReport.HasErrors;
+    Console.WriteLine(hasErrors ? "verification: failed" : "verification: passed");
+    return hasErrors ? 2 : 0;
 }
 
 static MethodDefinitionHandle ResolveMethodHandle(MetadataReader metadata, string methodArg)
@@ -188,4 +222,5 @@ static void PrintUsage()
     Console.Error.WriteLine("  dotforge run <path-to-managed-assembly>");
     Console.Error.WriteLine("  dotforge inspect <path-to-managed-assembly>");
     Console.Error.WriteLine("  dotforge disasm <path-to-managed-assembly> <method-token-or-Type::Method>");
+    Console.Error.WriteLine("  dotforge verify <path-to-managed-assembly>");
 }
