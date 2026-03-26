@@ -701,8 +701,8 @@ public sealed class MiniVm
 
             if (member.Parent.Kind == HandleKind.TypeReference)
             {
-                var ctorArgs = PopArguments(stack, ctorSig.ParameterCount);
-                if (TryCreateHostObject(metadata, (TypeReferenceHandle)member.Parent, ctorArgs, out var hostObject))
+                var hostCtorArgs = PopArguments(stack, ctorSig.ParameterCount);
+                if (TryCreateHostObject(metadata, (TypeReferenceHandle)member.Parent, hostCtorArgs, out var hostObject))
                 {
                     return hostObject;
                 }
