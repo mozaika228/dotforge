@@ -5,6 +5,7 @@ using Dotforge.Runtime.Gc;
 namespace Dotforge.Runtime;
 
 internal sealed class DotObject
+    : IHeapObject
 {
     private readonly GenerationalHeap _heap;
     private readonly Dictionary<string, object?> _fields;
@@ -25,11 +26,7 @@ internal sealed class DotObject
     public string TypeName { get; }
     public int Generation { get; private set; }
     public bool Marked { get; private set; }
-
-    public void PromoteToOld()
-    {
-        Generation = 1;
-    }
+    public int EstimatedSizeBytes => 64 + (_fields.Count * 16);
 
     public void Mark()
     {
@@ -62,14 +59,19 @@ internal sealed class DotObject
         _heap.WriteBarrier(this, value);
     }
 
-    public IEnumerable<DotObject> EnumerateReferences()
+    public IEnumerable<IHeapObject> EnumerateReferences()
     {
         foreach (var fieldValue in _fields.Values)
         {
-            if (fieldValue is DotObject dotObject)
+            if (fieldValue is IHeapObject heapObject)
             {
-                yield return dotObject;
+                yield return heapObject;
             }
         }
+    }
+
+    public void SetGeneration(int generation)
+    {
+        Generation = generation;
     }
 }

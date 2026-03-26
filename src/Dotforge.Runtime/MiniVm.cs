@@ -354,7 +354,8 @@ public sealed class MiniVm
                     {
                         var length = PopInt(frame.Stack);
                         var elementType = ResolveTypeNameFromToken(metadata, (int)instruction.Operand!);
-                        frame.Stack.Push(new DotArray(elementType, length));
+                        frame.Stack.Push(_heap.AllocateArray(elementType, length));
+                        _heap.MaybeCollect(EnumerateFrameRoots(frame));
                         ip++;
                         break;
                     }
@@ -663,6 +664,7 @@ public sealed class MiniVm
         }
 
         var instance = _heap.AllocateObject(typeHandle, typeName, fields);
+        _heap.MaybeCollect(Array.Empty<IHeapObject>());
         var ctorArgs = PopArguments(stack, ctorSig.ParameterCount);
         var allArgs = new object?[ctorArgs.Length + 1];
         allArgs[0] = instance;
@@ -1218,29 +1220,29 @@ public sealed class MiniVm
         return offset >= start && offset < start + length;
     }
 
-    private static IEnumerable<DotObject> EnumerateFrameRoots(ExecutionFrame frame)
+    private static IEnumerable<IHeapObject> EnumerateFrameRoots(ExecutionFrame frame)
     {
         foreach (var arg in frame.Args)
         {
-            if (arg is DotObject dotArg)
+            if (arg is IHeapObject heapArg)
             {
-                yield return dotArg;
+                yield return heapArg;
             }
         }
 
         foreach (var local in frame.Locals)
         {
-            if (local is DotObject dotLocal)
+            if (local is IHeapObject heapLocal)
             {
-                yield return dotLocal;
+                yield return heapLocal;
             }
         }
 
         foreach (var stackItem in frame.Stack)
         {
-            if (stackItem is DotObject dotStack)
+            if (stackItem is IHeapObject heapStack)
             {
-                yield return dotStack;
+                yield return heapStack;
             }
         }
     }

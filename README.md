@@ -34,11 +34,12 @@ flowchart LR
   - exceptions (`throw`, catch-region handling baseline)
 - Inline cache for `callvirt` dispatch (`method token + runtime type`).
 - Runtime object model for `int32`, `string`, object instances, and arrays.
-- Generational GC foundation:
-  - Gen0 nursery + Gen1 old generation
-  - mark/sweep-style collection flow
-  - write barrier + remembered set
-  - collection logging (`DOTFORGE_GC_LOG=1`)
+- Full GC runtime model (current implementation scope):
+- Gen0 + Gen1 + LOH partitions with automatic collection thresholds
+- mark/sweep with compaction phase simulation for stable survivor sets
+- write barrier + remembered set for old-to-young references
+- strong/weak handle table and finalization queue callbacks
+- collection statistics and logging (`DOTFORGE_GC_LOG=1`)
 - Metadata reflection catalog for type/method/field inspection.
 - JIT planning scaffold (`IL -> IR`) to support native backend work.
 - RyuJIT-lite foundation:
