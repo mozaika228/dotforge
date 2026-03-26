@@ -18,9 +18,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Restore local tools
-        run: dotnet tool restore
-
       - name: Restore
         run: dotnet restore dotforge.sln
 
