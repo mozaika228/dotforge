@@ -1,4 +1,5 @@
 using Dotforge.IL;
+using Dotforge.Runtime.Jit.Backend;
 using Dotforge.Runtime.Jit;
 
 namespace Dotforge.Runtime.Tests;
@@ -51,5 +52,36 @@ public sealed class JitPlanTests
         var plan = MethodJitPlan.Create(0x06000003, body);
         Xunit.Assert.Contains(plan.LoweredPseudoAsm, line => line.Contains("mov t"));
         Xunit.Assert.Contains(plan.LoweredPseudoAsm, line => line.Contains("ret"));
+    }
+
+    [Xunit.Fact]
+    public void ExecutesArithmeticThroughIrBackend()
+    {
+        var body = new IlMethodBody(
+        [
+            new IlInstruction(0, IlOpCode.LdcI4, 40),
+            new IlInstruction(5, IlOpCode.LdcI4_2),
+            new IlInstruction(6, IlOpCode.Add),
+            new IlInstruction(7, IlOpCode.Ret)
+        ]);
+
+        var plan = MethodJitPlan.Create(0x06000004, body);
+        Xunit.Assert.True(plan.IsExecutable);
+
+        var result = IrExecutionBackend.Execute(plan.OptimizedIr, Array.Empty<object?>(), Array.Empty<object?>());
+        Xunit.Assert.Equal(42, result);
+    }
+
+    [Xunit.Fact]
+    public void MarksUnsupportedIlAsNonExecutable()
+    {
+        var body = new IlMethodBody(
+        [
+            new IlInstruction(0, IlOpCode.Ldstr, 1),
+            new IlInstruction(5, IlOpCode.Ret)
+        ]);
+
+        var plan = MethodJitPlan.Create(0x06000005, body);
+        Xunit.Assert.False(plan.IsExecutable);
     }
 }

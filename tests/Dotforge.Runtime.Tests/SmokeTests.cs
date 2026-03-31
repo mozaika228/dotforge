@@ -3,6 +3,7 @@ using Dotforge.Metadata;
 using Dotforge.Runtime;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Reflection.Metadata.Ecma335;
 
 namespace Dotforge.Runtime.Tests;
 
@@ -29,6 +30,10 @@ public sealed class SmokeTests
         var vm = new MiniVm();
         var result = vm.ExecuteEntryPoint(assembly);
         Xunit.Assert.Equal(42, result);
+
+        var entryToken = MetadataTokens.GetToken(assembly.GetEntryPoint());
+        Xunit.Assert.True(vm.GetJitPlans().TryGetValue(entryToken, out var plan));
+        Xunit.Assert.True(plan!.IsExecutable);
     }
 
     [Xunit.Fact]

@@ -3,6 +3,7 @@ using Dotforge.Metadata;
 using Dotforge.Runtime.Gc;
 using Dotforge.Runtime.Interop;
 using Dotforge.Runtime.Jit;
+using Dotforge.Runtime.Jit.Backend;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -72,12 +73,20 @@ public sealed class MiniVm
         var methodBody = assembly.GetMethodBody(methodHandle);
         var decoded = IlDecoder.Decode(methodBody);
         var methodToken = MetadataTokens.GetToken(methodHandle);
+        var hasExceptionRegions = methodBody.ExceptionRegions.Any();
         if (!_jitPlans.ContainsKey(methodToken))
         {
-            _jitPlans[methodToken] = MethodJitPlan.Create(methodToken, decoded);
+            _jitPlans[methodToken] = MethodJitPlan.Create(methodToken, decoded, hasExceptionRegions);
         }
 
         var localCount = ReadLocalCount(metadata, methodBody.LocalSignature);
+        var jitPlan = _jitPlans[methodToken];
+        if (jitPlan.IsExecutable)
+        {
+            var locals = new object?[localCount];
+            return IrExecutionBackend.Execute(jitPlan.OptimizedIr, args, locals);
+        }
+
         var frame = new ExecutionFrame(instructions: decoded.Instructions, methodBody: methodBody, args: args, localCount: localCount)
         {
             Assembly = assembly,
