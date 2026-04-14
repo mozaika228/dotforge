@@ -4,7 +4,40 @@
 [![Coverage](https://codecov.io/gh/mozaika228/dotforge/branch/main/graph/badge.svg)](https://codecov.io/gh/mozaika228/dotforge)
 [![License: MIT](https://img.shields.io/github/license/mozaika228/dotforge)](LICENSE)
 
-DotForge is a CLR-style runtime project focused on executing managed IL with a production-oriented architecture: metadata loading, IL decoding, interpreter execution, and generational GC foundations.
+Experimental .NET-like runtime for executing managed IL from scratch.
+
+Build your own .NET runtime: metadata -> IL -> VM -> GC -> JIT.
+
+DotForge does not delegate program execution to the CLR JIT/runtime engine. It loads assemblies, decodes IL, and executes managed code in a custom runtime pipeline.
+
+## What is DotForge?
+
+DotForge is a custom-built runtime inspired by .NET CLR that:
+
+- loads real .NET assemblies (PE format)
+- parses ECMA-335 metadata
+- decodes and executes IL instructions
+- manages memory via a generational GC model
+- provides an executable JIT backend for a limited IR subset, with interpreter fallback
+
+This is not a wrapper. It is a from-scratch runtime implementation.
+
+## Example
+
+Run a compiled .NET assembly:
+
+```bash
+dotforge run Hello.dll
+```
+
+Executes real IL without delegating execution to the .NET runtime engine.
+
+## Why DotForge?
+
+- Understand how .NET works internally
+- Experiment with runtime, GC, and JIT design
+- Build a foundation for custom language runtimes
+- Explore performance tradeoffs between interpreter and JIT execution
 
 ## Architecture Overview
 
@@ -55,6 +88,8 @@ flowchart LR
 - three-address IR (`IlToIrLowerer`)
 - optimization passes (`const-fold`, `dce`)
 - pseudo x64 lowering for diagnostics
+- executable backend for a limited IR subset (`const/args/locals/arithmetic/branch/ret`)
+- safe fallback to IL interpreter for unsupported methods/opcodes and EH regions
 
 ## CLI
 
@@ -102,7 +137,7 @@ dotnet test dotforge.sln -c Release
 
 - `src/Dotforge.Metadata`: PE/metadata reader + reflection catalog.
 - `src/Dotforge.IL`: IL opcode model and decoder.
-- `src/Dotforge.Runtime`: VM, object model, arrays, GC foundation, JIT IR scaffold.
+- `src/Dotforge.Runtime`: VM, object model, arrays, GC foundation, JIT IR scaffold + limited executable backend.
 - `src/Dotforge.Cli`: `run`, `inspect`, `disasm` commands.
 - `tests/Dotforge.Runtime.Tests`: xUnit integration and opcode coverage tests.
 - `.github/workflows/ci.yml`: CI restore/build/test + coverage artifact upload.
